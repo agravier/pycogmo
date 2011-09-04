@@ -18,29 +18,46 @@ import vtk
 # Is an independent visualization process locked within a window interactor
 # interruptible by a piped in message?
 
+class vtkTimerCallback(object):
+   def __init__(self, input_pipe, disk):
+       self.timer_count = 0
+       self.child_conn = input_pipe
+       self.disk = disk
+ 
+   def execute(self,obj,event):
+       log_tick(self.timer_count)
+       # Here wait for update from simulation
+       # Problem: this is blocking. In case of empty pipe, the window
+       # interactor will not interact.
+       # This is not the best solution. Non-blocking pipe reading with
+       # infrequent checking is the solution
+       r = self.child_conn.recv()
+       if r<=0:
+           exit()
+       log_tick("tick received")
+       self.disk.SetInnerRadius(1-r/100.)
+       #actor.SetPosition(self.timer_count, self.timer_count,0);
+       iren = obj
+       iren.GetRenderWindow().Render()
+       self.timer_count += 1
 
-def log_tick():
+def log_tick(s):
     now = datetime.datetime.now()
-    print "tick from %s at time: %s" %(__name__, now)
+    print "tick from %s at time %s: %s" %(__name__, now, s)
     sys.stdout.flush()
 
 
 def visualization_process_f(child_conn):
-    log_tick()
+    log_tick("start visu")
     REN, REN_WIN, I_REN = setup_visualization()
+    REN.SetBackground(0.5, 0.5, 0.5)
     d = make_disk(2,1)
     m, a = map_source_object(d)
     add_actors_to_scene(REN, a)
-    finalize_and_render(REN_WIN, I_REN)
-    # Here wait for update from simulation
-    while True:
-        r = child_conn.recv()
-        if r<=0:
-            break
-        log_tick()
-        d.SetInnerRadius(1-r/10.)
-        REN_WIN.Render()
-    time.sleep(1)
+    prepare_render_env(REN_WIN, I_REN)
+    timer_id = setup_timer(I_REN, child_conn, d)
+    I_REN.Start()
+
 
 
 # Ok I need to set up a vtk pipeline
@@ -74,10 +91,15 @@ def add_actors_to_scene(renderer, actor, *args):
     if args:
         map(renderer.AddActor, args)
 
-def finalize_and_render(render_window, window_interactor):
+def prepare_render_env(render_window, window_interactor):
     window_interactor.Initialize()
     render_window.Render()
-#    window_interactor.Start()
+    log_tick("after render")
+
+def setup_timer(window_interactor, input_conn, disk_to_update):
+    callback = vtkTimerCallback(input_conn, disk_to_update)
+    window_interactor.AddObserver("TimerEvent", callback.execute)
+    return window_interactor.CreateRepeatingTimer(100)
 
 def main():
     parent_conn, child_conn = multiprocessing.Pipe()
@@ -85,8 +107,8 @@ def main():
                                 name="display_process",
                                 args=(child_conn,))
     p.start()
-    for a in reversed(range(-1,10)):
-        time.sleep(1)
+    for a in reversed(range(-1,100)):
+        time.sleep(10)
         parent_conn.send(a)
     p.join()
 
