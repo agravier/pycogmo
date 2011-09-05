@@ -25,12 +25,15 @@ class vtkTimerCallback(object):
        self.disk = disk
  
    def execute(self,obj,event):
-       log_tick(self.timer_count)
+       log_tick("vtkTimerCallback exec " + str(self.timer_count))
        # Here wait for update from simulation
        # Problem: this is blocking. In case of empty pipe, the window
        # interactor will not interact.
        # This is not the best solution. Non-blocking pipe reading with
        # infrequent checking is the solution
+       if (not self.child_conn.poll()):
+           log_tick("the pipeline is empty, returning")
+           return
        r = self.child_conn.recv()
        if r<=0:
            exit()
@@ -108,8 +111,13 @@ def main():
                                 args=(child_conn,))
     p.start()
     for a in reversed(range(-1,100)):
-        time.sleep(10)
-        parent_conn.send(a)
+        time.sleep(1)
+        log_tick("just before send")
+        # Only pipe in data to be visualized if visualization pipe is empty
+        if (not child_conn.poll()):
+            log_tick("the viz pipeline is empty, putting in some data")
+            parent_conn.send(a)
+        log_tick("just after send")
     p.join()
 
     pynnn.setup()
