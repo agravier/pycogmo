@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python2.7
 
 import datetime
 import logging
@@ -26,40 +26,49 @@ class VisualisableNetworkStructure(object):
     to make or let the user make these choices."""
     
     class Unit(object):
-        def __init__(self, x, y, z=None):
+        def __init__(self, id, x, y, z=None):
+            self.id = id
             self.x, self.y, self.z = x, y, z
     
     def __init__(self):
         # all units in consistent order, the same order that is to be
         # used when transmitting activity updates.
         self.units = list()
-        # info about the conceptual grouping of units
-        self.maps = list()
+        # info about the conceptual grouping of units, a dict of
+        # (name of the map, list of unit global indices)
+        self.maps = dict()
         # detailed connectivity (unit-to-unit)
         self.units_conn = list()
         # abstract connectivity (between maps)
         self.maps_conn = list()
 
-    def add_unit(pynn_unit, assign_map = None):
-        "appends a unit to the list of units."
+    def add_unit(self, unit, assign_map = None):
+        """appends a unit to the global list of units and to the
+        assigned map's units list."""
+        self.units.append(unit)
+        self.add_unit_to_map(unit, assign_map)
+
+    def add_unit_to_map(self, unit, assign_map):
+        if assign_map not in self.maps:
+            self.maps[assign_map]=[]
+        self.maps[assign_map].append(unit)
+    
+    def add_population(self, iterable_population, override_map = None):
+        """appends a group of units to the list of units."""
         pass
     
-    def add_population(pynn_population, override_map = None):
-        "appends a group of units to the list of units."
-        pass
-    
-    def connect_units(snd_unit_idx, recv_unit_idx, strength):
+    def connect_units(self, snd_unit_idx, recv_unit_idx, strength):
         """appends a connection between two units (referenced by their
         indices in the list) to the list of connections. Strength is
         between -1 and 1"""
         pass
 
-    def connect_units(list_of_connections):
-        """"Connects all units in the list of triplets (sending,
+    def connect_units(self, list_of_connections):
+        """Connects all units in the list of triplets (sending,
         receiving, strength"""
         pass
 
-    def connect_maps(snd_map, rcv_map):
+    def connect_maps(self, snd_map, rcv_map):
         """indicates a general pattern of cnnectivity from one map to
         the other"""
 

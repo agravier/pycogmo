@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python2.7
 
 import pyNN.nest as pynnn
 # from pyNN.recording.files import HDF5ArrayFile needs cython and
@@ -12,7 +12,16 @@ import time
 import utils
 from utils import log_tick, LOGGER
 import visualisation
+import pynn_to_visu
 
+def setup_populations_recording(p, *args):
+    """calls record(to_file=False), record_gsyn(to_file=False),
+    record_v(to_file=False) on the populations in argument"""
+    for pop in (p,) + args:
+        pop.record(to_file=False)
+        pop.record_gsyn(to_file=False)
+        pop.record_v(to_file=False)
+        
 def main():
     utils.configure_loggers()
     parent_conn, child_conn = multiprocessing.Pipe()
@@ -44,9 +53,9 @@ def main():
     p1.set({'tau_m':20, 'v_rest':-65})
     p2 = pynnn.Population(20, pynnn.IF_curr_alpha,
                           cellparams={'tau_m': 15.0, 'cm': 0.9})
-    prj1_2 = pynnn.Projection(p1, p2,
-                       pynnn.AllToAllConnector(allow_self_connections=False),
-                        target='excitatory')
+    prj1_2 = pynnn.Projection(
+        p1, p2, pynnn.AllToAllConnector(allow_self_connections=False),
+        target='excitatory')
     # I may need to make own PyNN Connector class. Otherwise, this is
     # neat:  exponentially decaying probability of connections depends
     # on distance. Distance is only calculated using x and y, which
