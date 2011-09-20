@@ -1,11 +1,11 @@
-#!/usr/bin/env python2.7
+#!/usr/bin/env python2
 
 import itertools
 import math
 import pyNN.nest as pynnn
 from visualisation import VisualisableNetworkStructure
 
-class NetworkClosedForStructuralChanges(Exception):
+class AdapterLocked(Exception):
     pass
 
 class PynnToVisuAdapter(object):
@@ -18,13 +18,30 @@ class PynnToVisuAdapter(object):
         self.num_units = 0
 
     def check_open(self):
+        """Returns if the network structure is open for changes"""
+        return not self.commited
+
+    def assert_open(self):
         """Checks if the network structure is still open for changes,
         raising an exceptio if not"""
-        if self.commited:
-            raise NetworkClosedForStructuralChanges()
+        if not self.check_open():
+            raise AdapterLocked()
+            
+    def commit_structure(self):
+        self.assert_open()
+        self.vis_units = sorted(
+            self.vis_units, key = lambda v_u_t: v_u_t[1].real)
+        for u in self.vis_units:
+            self.output_struct.add_unit(u[0], concept_map)
+        self.commited = True
+
+    def reopen(self):
+        self.commited = False
 
     def add_pynn_population(self, p, concept_map = None):
-        self.check_open()
+        """ Adds all units of the pyNN population p to the list of
+        visualizable units"""
+        self.assert_open()
         self.pynn_units_it = itertools.chain(self.pynn_units_it, p)
         three_d = "dz" in p.structure.parameter_names
         for pynn_u in p:
@@ -40,21 +57,17 @@ class PynnToVisuAdapter(object):
                     pynn_u.position[2])
             self.vis_units.append((u, pynn_u, concept_map))
             # We add the unit when commiting the structure, because we
-            # need to add them to the output_struct in global id order 
+            # need to add them to the output_struct in global id order
         self.num_units += p.size
-            
-    def commit_structure(self):
-        self.check_open()
-        self.vis_units = sorted(
-            self.vis_units, key = lambda v_u_t: v_u_t[1].real)
-        for u in self.vis_units:
-            self.output_struct.add_unit(u[0], concept_map)
-        self.commited = True
 
     def add_pynn_projection(self, sending_population,
                             receiving_population,
                             connection_manager):
-        self.check_open()
+        """The connection_manager parameter expects a
+        pyNN.nest.simulator.ConnectionManager, it can be obtrained by
+        pyNN.nest.simulator.Projection.connection_manager.
+        """
+        self.assert_open()
         w = connection_manager.get("weight", "array")
         n_send, n_recv = w.shape
         for i in range(0, n_send-1):

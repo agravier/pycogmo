@@ -1,4 +1,5 @@
-#!/usr/bin/enc python2
+#!/usr/bin/env python2
+
 import datetime
 import logging
 import multiprocessing

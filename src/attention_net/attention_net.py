@@ -1,4 +1,4 @@
-#!/usr/bin/env python2.7
+#!/usr/bin/env python2
 
 import pyNN.nest as pynnn
 # from pyNN.recording.files import HDF5ArrayFile needs cython and
@@ -60,9 +60,10 @@ def main():
     # neat:  exponentially decaying probability of connections depends
     # on distance. Distance is only calculated using x and y, which
     # are on a toroidal topo with boundaries at 0 and 500.
-    connector = pynnn.DistanceDependentProbabilityConnector("exp(-abs(d))",
-                   space=pynnn.Space(axes='xy',
-                               periodic_boundaries=((0,500), (0,500), None)))
+    connector = pynnn.DistanceDependentProbabilityConnector(
+        "exp(-abs(d))",
+        space=pynnn.Space(
+            axes='xy', periodic_boundaries=((0,500), (0,500), None)))
     # Otherwise, the very leet connection set algebra (python CSA
     # module) can be used.
     weight_distr = pynnn.RandomDistribution(distribution='gamma',
