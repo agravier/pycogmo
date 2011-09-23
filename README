@@ -1,1 +1,71 @@
-TODO: write about the idea, the roadmap, the existing files
+TODO: write about the idea, the roadmap, the existing files, make README .rst
+
+This is a Python 2 project meant to be run on Unix platforms. If you run windows, install Linux on a VM. Virtualbox works and is free.
+
+Non-python dependencies:
+- NEST (NEST Neural Simulator) + pyNEST
+- VTK (The Visualization Toolkit) + Python 2 bindings
+
+Python pip-installable dependencies:
+- PyNN
+- mock
+- nose
+
+The project should be installed locally as a non-priviledged user except if you know what you are doing.
+
+Install NEST under your home directory, e.g. ~/local-install/
+
+Modify your environment setup script:
+NEST_INSTALL_DIR=$HOME/local-install
+NEST_SUBFOLDER_PATH=$HOME/nest
+NESTRCFILENAME=$NEST_SUBFOLDER_PATH/config/nestrc
+NEST_DATA_PATH=$NEST_SUBFOLDER_PATH/nest_data
+NEST_DATA_PREFIX="out_"
+export NEST_INSTALL_DIR NESTRCFILENAME NEST_DATA_PATH NEST_DATA_PREFIX
+export LD_LIBRARY_PATH=$NEST_INSTALL_DIR/lib/nest:$LD_LIBRARY_PATH
+
+source it and mkdir -p $NEST_DATA_PATH $NEST_DATA_PATH/../config
+
+edit your /etc/ld.so.conf, add there /home/<<yourself>>/local-install/lib/nest and run ldconfig
+
+Install VTK using your OS's package manager, e.g.
+apt-get install vtk, pacman -S vtk, emerge vtk
+
+Do the following modifications to your environment:
+Add $HOME/local-install/usr/bin:$HOME/local-install/usr/local/bin:$HOME/local-install/bin to your PATH
+Add .:$HOME/local-install/lib/python2.7/site-packages to your PYTHONPATH, additionally to the place of your system-wide python library (soemthing like /usr/lib/python2.7/site-packages)
+
+Anstall virtualenv and virtualenvwrapper (with pip or your distro)
+
+Modify your environment setup script again:
+export WORKON_HOME=your_python_virtualenv/directory, for instance $HOME/virtualenvs. Remember to mkdir $HOME/virtualenvs
+export VIRTUALENVWRAPPER_PYTHON=`which python2`, or `which python2.7` or whatever your python 2 binary is called
+
+Add source /usr/local/bin/virtualenvwrapper.sh to your .bash_profile
+Add alias ipython='python2 -c "from IPython import embed; embed()" 2>/dev/null || python2 -c "import IPython; IPython.Shell.IPShell().mainloop()"' to your .bashrc
+
+Have bash_profile source bashrc.
+
+mkvirtualenv cogneuro
+mkdir -p dev/cogneuro/ && cd dev/cogneuro
+pip install PyNN mock nose
+git clone git://github.com/agravier/pycogmo.git
+cd pycogmo/src/attention_net/
+python attention_net.py
+
+
+Detailed instructions to install NEST 2.0.0-rc4
+
+sudo apt-get install build-essential autoconf automake libtool libltdl-dev libreadline5-dev libncurses5-dev libgsl0-dev python-numpy python-scipy python-matplotlib ipython
+cd nest-2.0.0rc4
+./configure --prefix=$HOME/local-install PYTHON_EXEC='/usr/bin/python2.7' --with-python='/usr/bin/python2.7' && make && make install && make installcheck
+
+
+to create an environment: mkvirtualenv <name>
+to activate an environment: . ~/venvs/<name>/bin/activate
+e.g. . ~/virtualenvs/cogneuro/bin/activate
+to deactivate it: deactivate                                                                                         to install something in the virtual env: pip install <python package>
+
+useful:
+pip install yolk
+yolk -l
