@@ -14,7 +14,11 @@ class PynnToVisuAdapter(object):
         self.logger = logger
         self.output_struct = VisualisableNetworkStructure()
         self.pynn_units_it = []
+        # individual units list
         self.vis_units = []
+        # individual connections list
+        self.units_connections = []
+        self.maps_connections = []
         self.num_units = 0
 
     def check_open(self):
@@ -28,15 +32,23 @@ class PynnToVisuAdapter(object):
             raise AdapterLocked()
             
     def commit_structure(self):
+        """Adds all units to the outout network structure, sorted by
+        PyNN ID, and closes the adapter to prevent further structural
+        change."""
         self.assert_open()
         self.vis_units = sorted(
             self.vis_units, key = lambda v_u_t: v_u_t[1].real)
         for u in self.vis_units:
-            self.output_struct.add_unit(u[0], concept_map)
+            self.output_struct.add_unit(u[0], u[2])
+        self.output_struct.connect_units(self.units_connections)
+        for c in maps_connections:
+            self.output_struct.connect_maps(c[0], c[1])
         self.commited = True
 
     def reopen(self):
-        self.commited = False
+        """TODO: to be able to reopen, we should keep track of units
+        already commited to the output struct."""
+        raise NotImplementedError
 
     def add_pynn_population(self, p, concept_map = None):
         """ Adds all units of the pyNN population p to the list of
@@ -46,13 +58,13 @@ class PynnToVisuAdapter(object):
         three_d = "dz" in p.structure.parameter_names
         for pynn_u in p:
             u = None
-            if three_d:
+            if not three_d:
                 u = VisualisableNetworkStructure.Unit(
-                    pynn_u.real,
+                    int(pynn_u),
                     pynn_u.position[0], pynn_u.position[1])
             else:
                 u = VisualisableNetworkStructure.Unit(
-                    pynn_u.real,
+                    int(pynn_u),
                     pynn_u.position[0], pynn_u.position[1],
                     pynn_u.position[2])
             self.vis_units.append((u, pynn_u, concept_map))
@@ -63,7 +75,8 @@ class PynnToVisuAdapter(object):
     def add_pynn_projection(self, sending_population,
                             receiving_population,
                             connection_manager):
-        """The connection_manager parameter expects a
+        """Creates a 
+        The connection_manager parameter expects a
         pyNN.nest.simulator.ConnectionManager, it can be obtrained by
         pyNN.nest.simulator.Projection.connection_manager.
         """
@@ -81,9 +94,9 @@ class PynnToVisuAdapter(object):
                   receiving_population[a].real,
                   self.convert_weight(b))
                 for a, b in enumerate(w[i]) if not math.isnan(b)]
-            self.output_struct.connect_units(connections)
-        self.output_struct.connect_maps(sending_population.label,
-                                        receiving_population.label)
+            self.units_connections.append(connections)
+        self.maps_connections.append((sending_population.label,
+                                        receiving_population.label))
 
     def convert_weight(self, w):
         """ Converts pyNN weights by normalizing them from their
