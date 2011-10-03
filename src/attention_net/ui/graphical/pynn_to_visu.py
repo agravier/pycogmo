@@ -41,7 +41,7 @@ class PynnToVisuAdapter(object):
         for u in self.vis_units:
             self.output_struct.add_unit(u[0], u[2])
         self.output_struct.connect_units(self.units_connections)
-        for c in maps_connections:
+        for c in self.maps_connections:
             self.output_struct.connect_maps(c[0], c[1])
         self.commited = True
 

@@ -8,8 +8,8 @@ import sys
 import time
 import vtk
 # -- own modules
-import utils
-from utils import log_tick
+import common.utils as utils
+from common.utils import log_tick
 
 LOGGER = None # initialized by the child visualization process, should
               # be the muiltiprocessing module's logger because of

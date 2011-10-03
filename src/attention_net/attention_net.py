@@ -9,10 +9,10 @@ import multiprocessing # because threading will not bypass the GIL
 import sys
 import time
 # -- own modules
-import utils
-from utils import log_tick, LOGGER
-import visualisation
-import pynn_to_visu
+import common.utils as utils
+from common.utils import log_tick, LOGGER
+import ui.graphical.visualisation as visualisation
+import ui.graphical.pynn_to_visu as pynn_to_visu
 
 def setup_populations_recording(p, *args):
     """calls record(to_file=False), record_gsyn(to_file=False),

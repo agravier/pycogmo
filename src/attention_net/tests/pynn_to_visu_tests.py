@@ -5,7 +5,7 @@ from logging import NullHandler
 from mock import Mock, patch
 from nose import with_setup
 from nose.tools import eq_, raises, timed
-from ..pynn_to_visu import *
+from ui.graphical.pynn_to_visu import *
 import pyNN.nest as pynnn
 
 DUMMY_LOGGER = logging.getLogger("testLogger")
