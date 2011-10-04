@@ -1,5 +1,6 @@
 #!/usr/bin/env python2
 
+import itertools
 import logging
 from logging import NullHandler 
 from mock import Mock, patch
@@ -99,7 +100,41 @@ def test_adapter_keeps_unit_count():
     A.commit_structure()
     assert A.num_units == pop_size * 2
 
+@with_setup(setup_adapter)
 def test_add_pynn_projection_adds_all_connections():
     """Tests if add_pynn_projection adds exactly the connections it's
-    given to its internal units_connections list"""
+    given to its internal units_connections list."""
+    pop_size = 27
+    pynn_pop1 = pynnn.Population(pop_size, pynnn.IF_cond_alpha)
+    ids1 = [int(u) for u in pynn_pop1.all()]
+    pynn_pop2 = pynnn.Population(pop_size, pynnn.IF_cond_alpha,
+                                 structure = pynnn.space.Grid3D())
+    ids2 = [int(u) for u in pynn_pop2.all()]
+    A.add_pynn_population(pynn_pop1)
+    A.add_pynn_population(pynn_pop2, concept_map = "testmap")
+    pynn_proj1 = pynnn.Projection(pynn_pop1, pynn_pop2,
+                                  pynnn.OneToOneConnector())
+    pynn_proj2 = pynnn.Projection(pynn_pop2, pynn_pop1,
+                                  pynnn.AllToAllConnector())
+    A.add_pynn_projection(pynn_pop1, pynn_pop2, pynn_proj1.connection_manager)
+    A.add_pynn_projection(pynn_pop2, pynn_pop1, pynn_proj2.connection_manager)
+    for c in itertools.groupby(A.units_connections, key=lambda x:x[0]):
+        out_it = c[1] # iterator on outbounds cx from unit c[0]
+        if c[0] in ids1:
+            assert out_it.next()[1] in ids2
+            try:
+                out_it.next()
+                assert False, "There should only be one outbound connection from this unit."
+            except StopIteration:
+                pass
+        elif c[0] in ids2:
+            o_l = [o[1] for o in out_it]
+            assert set(o_l) == set(ids1)
+        else:
+            assert False, "Unit ID inexistent on the PyNN side." 
+
+@with_setup(setup_adapter)
+def test_commit_structure_results_in_complete_output_struct():
+    """Tests the completeness of the output structure's units and connections."""
+    
     assert False

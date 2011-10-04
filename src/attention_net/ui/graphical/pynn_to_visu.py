@@ -90,11 +90,11 @@ class PynnToVisuAdapter(object):
             # receiving cells in existing connections from neuron i,
             # and the weights
             connections = [
-                (pynn_u.real,
-                  receiving_population[a].real,
-                  self.convert_weight(b))
+                (pynn_u.real, 
+                 receiving_population[a].real, 
+                 self.convert_weight(b))
                 for a, b in enumerate(w[i]) if not math.isnan(b)]
-            self.units_connections.append(connections)
+            self.units_connections.extend(connections)
         self.maps_connections.append((sending_population.label,
                                         receiving_population.label))
 
