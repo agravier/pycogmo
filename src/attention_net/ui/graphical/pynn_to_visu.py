@@ -20,6 +20,8 @@ class PynnToVisuAdapter(object):
         self.units_connections = []
         self.maps_connections = []
         self.num_units = 0
+        # Aliases for names of populations {PyNN_name: alias, ...}
+        self.aliases = {}
 
     def check_open(self):
         """Returns if the network structure is open for changes"""
@@ -50,10 +52,12 @@ class PynnToVisuAdapter(object):
         already commited to the output struct."""
         raise NotImplementedError
 
-    def add_pynn_population(self, p, concept_map = None):
+    def add_pynn_population(self, p, alias = None):
         """ Adds all units of the pyNN population p to the list of
         visualizable units"""
         self.assert_open()
+        if alias == None:
+            alias = p.label
         self.pynn_units_it = itertools.chain(self.pynn_units_it, p)
         three_d = "dz" in p.structure.parameter_names
         for pynn_u in p:
@@ -67,10 +71,11 @@ class PynnToVisuAdapter(object):
                     int(pynn_u),
                     pynn_u.position[0], pynn_u.position[1],
                     pynn_u.position[2])
-            self.vis_units.append((u, pynn_u, concept_map))
+            self.vis_units.append((u, pynn_u, alias))
             # We add the unit when commiting the structure, because we
             # need to add them to the output_struct in global id order
         self.num_units += p.size
+        self.aliases[p.label] = alias
 
     def add_pynn_projection(self, sending_population,
                             receiving_population,

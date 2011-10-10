@@ -18,6 +18,29 @@ def setup_adapter():
     global A
     A = PynnToVisuAdapter(DUMMY_LOGGER)
 
+# holder class ("namespace") fot the test variables
+class Tns(object):
+    pass
+
+def setup_and_fill_adapter():
+    setup_adapter()
+    Tns.pop_size = 27
+    Tns.pynn_pop1 = pynnn.Population(Tns.pop_size, pynnn.IF_cond_alpha)
+    Tns.ids1 = [int(u) for u in Tns.pynn_pop1.all()]
+    Tns.pynn_pop2 = pynnn.Population(Tns.pop_size, pynnn.IF_cond_alpha,
+                                 structure = pynnn.space.Grid3D())
+    Tns.ids2 = [int(u) for u in Tns.pynn_pop2.all()]
+    A.add_pynn_population(Tns.pynn_pop1)
+    Tns.pop2_alias = "testmap"
+    A.add_pynn_population(Tns.pynn_pop2, alias = Tns.pop2_alias)
+    Tns.pynn_proj1 = pynnn.Projection(Tns.pynn_pop1, Tns.pynn_pop2,
+                                  pynnn.OneToOneConnector())
+    Tns.pynn_proj2 = pynnn.Projection(Tns.pynn_pop2, Tns.pynn_pop1,
+                                  pynnn.AllToAllConnector())
+    A.add_pynn_projection(Tns.pynn_pop1, Tns.pynn_pop2,
+                          Tns.pynn_proj1.connection_manager)
+    A.add_pynn_projection(Tns.pynn_pop2, Tns.pynn_pop1, 
+                          Tns.pynn_proj2.connection_manager)
 
 @with_setup(setup_adapter)
 def test_adapter_locked_states():
@@ -30,8 +53,7 @@ def test_adapter_locked_states():
 
 @with_setup(setup_adapter)
 def test_adapter_methods_call_check_open():
-    """methods in the methods_checking_open list are checked to have
-    called check_open"""
+    """methods in the methods_checking_open list have called check_open"""
     A.check_open = Mock(return_value=True)
     pynn_pop1 = pynnn.Population(1, pynnn.IF_cond_alpha)
     pynn_pop2 = pynnn.Population(1, pynnn.IF_cond_alpha)
@@ -68,8 +90,7 @@ def teardown_mock_unit_id():
 @with_setup(setup_mock_unit_unit_id, teardown_mock_unit_id)
 @with_setup(setup_adapter)
 def test_add_pynn_population_processes_all_units():
-    """Verifies if add_pynn_population checks the id of each unit u
-    that it's given by checking if it accesses u's int value."""
+    """add_pynn_population checks the int value of each unit it's given."""
     pop_size = 27
     pynnn.simulator.ID.__int__.return_value = 1
     pynn_pop1 = pynnn.Population(pop_size, pynnn.IF_cond_alpha)
@@ -81,60 +102,53 @@ def test_add_pynn_population_processes_all_units():
     pynnn.simulator.ID.__int__.return_value = 1
     pynn_pop2 = pynnn.Population(pop_size, pynnn.IF_cond_alpha,
                                  structure = pynnn.space.Grid3D())
-    A.add_pynn_population(pynn_pop2, concept_map = "testmap")
+    A.add_pynn_population(pynn_pop2, alias = "testmap")
     for u in pynn_pop2.all():
         assert u.__int__.call_count == pop_size, "units missed in the 3D case"
 
+@with_setup(setup_and_fill_adapter)
+def test_add_pynn_population_sets_up_labels_and_aliases():
+    pynn_pop3 =  pynnn.Population(1, pynnn.IF_cond_alpha)
+    A.add_pynn_population(pynn_pop3)
+    assert A.aliases[Tns.pynn_pop1.label] == Tns.pynn_pop1.label
+    assert A.aliases[Tns.pynn_pop2.label] == Tns.pop2_alias
+    assert A.aliases[pynn_pop3.label] == pynn_pop3.label
+
 @with_setup(setup_adapter)
 def test_adapter_keeps_unit_count():
-    """Verifies if several add_pynn_population followed by
-    commit_structure leave the adapter in a consistent state regarding
-    the number of units."""
+    """Add_pynn_population and commit_structure result in consistent number of units."""
     assert A.num_units == 0
     pop_size = 27
     pynn_pop1 = pynnn.Population(pop_size, pynnn.IF_cond_alpha)
-    A.add_pynn_population(pynn_pop1, concept_map = "soilwork")
+    A.add_pynn_population(pynn_pop1, alias = "soilwork")
     pynn_pop2 = pynnn.Population(pop_size, pynnn.IF_cond_alpha,
                                  structure = pynnn.space.Grid3D())
     A.add_pynn_population(pynn_pop2)
     A.commit_structure()
     assert A.num_units == pop_size * 2
 
-@with_setup(setup_adapter)
+@with_setup(setup_and_fill_adapter)
 def test_add_pynn_projection_adds_all_connections():
     """Tests if add_pynn_projection adds exactly the connections it's
     given to its internal units_connections list."""
-    pop_size = 27
-    pynn_pop1 = pynnn.Population(pop_size, pynnn.IF_cond_alpha)
-    ids1 = [int(u) for u in pynn_pop1.all()]
-    pynn_pop2 = pynnn.Population(pop_size, pynnn.IF_cond_alpha,
-                                 structure = pynnn.space.Grid3D())
-    ids2 = [int(u) for u in pynn_pop2.all()]
-    A.add_pynn_population(pynn_pop1)
-    A.add_pynn_population(pynn_pop2, concept_map = "testmap")
-    pynn_proj1 = pynnn.Projection(pynn_pop1, pynn_pop2,
-                                  pynnn.OneToOneConnector())
-    pynn_proj2 = pynnn.Projection(pynn_pop2, pynn_pop1,
-                                  pynnn.AllToAllConnector())
-    A.add_pynn_projection(pynn_pop1, pynn_pop2, pynn_proj1.connection_manager)
-    A.add_pynn_projection(pynn_pop2, pynn_pop1, pynn_proj2.connection_manager)
     for c in itertools.groupby(A.units_connections, key=lambda x:x[0]):
         out_it = c[1] # iterator on outbounds cx from unit c[0]
-        if c[0] in ids1:
-            assert out_it.next()[1] in ids2
+        if c[0] in Tns.ids1:
+            assert out_it.next()[1] in Tns.ids2
             try:
                 out_it.next()
                 assert False, "There should only be one outbound connection from this unit."
             except StopIteration:
                 pass
-        elif c[0] in ids2:
+        elif c[0] in Tns.ids2:
             o_l = [o[1] for o in out_it]
-            assert set(o_l) == set(ids1)
+            assert set(o_l) == set(Tns.ids1)
         else:
             assert False, "Unit ID inexistent on the PyNN side." 
 
-@with_setup(setup_adapter)
+@with_setup(setup_and_fill_adapter)
 def test_commit_structure_results_in_complete_output_struct():
     """Tests the completeness of the output structure's units and connections."""
-    
+    # TODO: compare A.output_struct and a hand-made version. only doable when
+    # VisualisableNEtworkStructure is done and tested.
     assert False
