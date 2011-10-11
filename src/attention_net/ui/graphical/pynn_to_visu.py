@@ -5,14 +5,14 @@ import math
 import pyNN.nest as pynnn
 from visualisation import VisualisableNetworkStructure
 
-class AdapterLocked(Exception):
+class AdapterLockedError(Exception):
     pass
 
 class PynnToVisuAdapter(object):
     def __init__(self, logger):
         self.commited = False
         self.logger = logger
-        self.output_struct = VisualisableNetworkStructure()
+        self.output_struct = VisualisableNetworkStructure(logger)
         self.pynn_units_it = []
         # individual units list
         self.vis_units = []
@@ -31,7 +31,7 @@ class PynnToVisuAdapter(object):
         """Checks if the network structure is still open for changes,
         raising an exceptio if not"""
         if not self.check_open():
-            raise AdapterLocked()
+            raise AdapterLockedError()
             
     def commit_structure(self):
         """Adds all units to the outout network structure, sorted by

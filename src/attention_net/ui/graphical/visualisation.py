@@ -25,12 +25,32 @@ class VisualisableNetworkStructure(object):
     units, or anything else. It's the visualisation interface that is
     to make or let the user make these choices."""
     
-    class Unit(object):
-        def __init__(self, id, x, y, z=None):
-            self.id = id
-            self.x, self.y, self.z = x, y, z
+    class UnitNotFoundError(Exception):
+        pass
     
-    def __init__(self):
+    class WeightOutOfRangeError(Exception):
+        pass
+    
+    class Unit(object):
+        def __init__(self, unit_id, x, y, z=None):
+            self.unit_id = unit_id
+            self.x, self.y, self.z = x, y, z
+        def __eq__(self, other):
+            e = self.unit_id == other.unit_id
+            if e and (self.x != other.x or self.y != other.y or \
+                      self.z != other.y):
+                global LOGGER
+                LOGGER.error("Units with ID %i and %i and coordinates %s and %s can't co-exist.",
+                             self.unit_id, other.unit_id, 
+                             (self.x, self.y, self.z), 
+                             (other.x, other.y, other.z))
+                return false
+            return e
+        def __int__(self):
+            return self.unit_id
+    
+    def __init__(self, logger):
+        self.logger = logger
         # all units in consistent order, the same order that is to be
         # used when transmitting activity updates.
         self.units = list()
@@ -46,31 +66,47 @@ class VisualisableNetworkStructure(object):
         """appends a unit to the global list of units and to the
         assigned map's units list."""
         self.units.append(unit)
-        self.add_unit_to_map(unit, assign_map)
+        self.assign_unit_to_map(unit, assign_map)
 
-    def add_unit_to_map(self, unit, assign_map):
+    def assign_unit_to_map(self, unit, assign_map):
+        """Assigns the already existing unit of type
+        VisualisableNetworkStructure.Unit to the given map that may
+        need to be created for the occasion."""
+        if unit not in self.units:
+            raise self.UnitNotFoundError()
         if assign_map not in self.maps:
             self.maps[assign_map]=[]
         self.maps[assign_map].append(unit)
     
     def add_population(self, iterable_population, override_map = None):
         """appends a group of units to the list of units."""
-        pass
+        for u in iterable_population:
+            self.add_unit(u, override_map)
     
-    def connect_units(self, snd_unit_idx, recv_unit_idx, strength):
+    def connect_units(self, snd_unit_id, rcv_unit_id, strength):
         """appends a connection between two units (referenced by their
-        indices in the list) to the list of connections. Strength is
-        between -1 and 1"""
+        id numbers) to the list of connections. Strength is between -1
+        and 1"""
+        snd_unit_id = int(snd_unit_id)
+        rcv_unit_id = int(rcv_unit_id)
+        units_ids = set([u.unit_id for u in self.units])
+        if snd_unit_id not in units_ids or rcv_unit_id not in units_ids:
+            raise self.UnitNotFoundError()
+        if strength > 1 or strength < -1:
+            raise self.WeightOutOfRangeError()
+        self.units_conn.append((snd_unit_id, rcv_unit_id, strength))
         pass
 
-    def connect_units(self, list_of_connections):
-        """Connects all units in the list of triplets (sending,
-        receiving, strength"""
-        pass
+    def connect_units_list(self, list_of_connections):
+        """Connects all units in the list of triplets (sending_id,
+        receiving_id, strength"""
+        for c in list_of_connections:
+            self.connect_units(*c)
 
     def connect_maps(self, snd_map, rcv_map):
         """indicates a general pattern of cnnectivity from one map to
         the other"""
+        self.maps_conn.append((snd_map, rcv_map))
 
 # So visualization and processing are two different processes.
 # The simulation process may yield() a state display update every n epochs,

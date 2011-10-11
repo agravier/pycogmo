@@ -21,7 +21,7 @@ def ensure_dir(f):
 def configure_loggers():
     LOGGER.setLevel(SUBDEBUG)
     debug_handler = logging.StreamHandler()
-    debug_handler.setLevel(SUBDEBUG)
+    debug_handler.setLevel(INFO)
     debug_formatter = logging.Formatter(
         fmt='%(asctime)s - %(levelname)s - %(message)s',
         datefmt='%m-%d %H:%M')
@@ -30,11 +30,12 @@ def configure_loggers():
     logfile = LOG_DIR + "/" + datetime.datetime.now().strftime("%Y.%m.%d-%H.%M.%S.%f") + ".log"
     ensure_dir(logfile)
     file_handler = logging.FileHandler(logfile)
-    file_handler.setLevel(INFO)
-    file_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    file_handler.setLevel(SUBDEBUG)
+    file_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
     file_handler.setFormatter(file_formatter)
     LOGGER.addHandler(file_handler)
-
+    # Necessary to circumvent the non-configurable logger of pyNN
+    logging.root.addHandler(file_handler)
        
 
 def log_tick(s):
