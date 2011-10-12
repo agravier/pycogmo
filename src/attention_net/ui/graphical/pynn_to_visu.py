@@ -42,7 +42,7 @@ class PynnToVisuAdapter(object):
             self.vis_units, key = lambda v_u_t: v_u_t[1].real)
         for u in self.vis_units:
             self.output_struct.add_unit(u[0], u[2])
-        self.output_struct.connect_units(self.units_connections)
+        self.output_struct.connect_units_list(self.units_connections)
         for c in self.maps_connections:
             self.output_struct.connect_maps(c[0], c[1])
         self.commited = True

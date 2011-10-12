@@ -4,8 +4,10 @@ import itertools
 import logging
 from logging import NullHandler 
 from mock import Mock, patch
+import multiprocessing
 from nose import with_setup
 from nose.tools import eq_, raises, timed, nottest
+import ui.graphical.visualisation
 from ui.graphical.visualisation import *
 from ui.graphical.visualisation import VisualisableNetworkStructure as VNS
 
@@ -133,33 +135,76 @@ def test_VNS_connect_maps():
 # general setup functions #
 ###########################
 
-@with_setup()
-def test_vtkTimerCallback():
-    assert False
+def setup_child_conn_and_callback():
+    Tns.parent_conn, Tns.child_conn = multiprocessing.Pipe()
+    Tns.vtc = vtkTimerCallback(Tns.child_conn, Mock())
 
-@with_setup()
-def test_visualisation_process_f():
-    assert False
+def setup_patch_visualisation_functions():
+    Tns.setup_vis_patch = patch("ui.graphical.visualisation.setup_visualisation")
+    Tns.add_actors_patch = patch("ui.graphical.visualisation.add_actors_to_scene")
+    Tns.prepare_env_patch = patch("ui.graphical.visualisation.prepare_render_env")
+    Tns.setup_timer_patch = patch("ui.graphical.visualisation.setup_timer")
+    Tns.setup_vis_mock = Tns.setup_vis_patch.start()
+    Tns.setup_vis_mock.return_value = (Mock(), Mock(), Mock())
+    Tns.add_actors_mock = Tns.add_actors_patch.start()
+    Tns.prepare_env_mock = Tns.prepare_env_patch.start()
+    Tns.setup_timer_mock = Tns.setup_timer_patch.start()
 
-@with_setup()
-def test_setup_visualisation():
-    assert False
+def teardown_patch_visualisation_functions():
+    Tns.setup_vis_patch.stop()
+    Tns.setup_vis_mock = None
+    Tns.add_actors_patch.stop()
+    Tns.add_actors_mock = None
+    Tns.prepare_env_patch.stop()
+    Tns.prepare_env_mock = None
+    Tns.setup_timer_patch.stop()
+    Tns.setup_timer_mock = None
 
-@with_setup()
-def test_map_source_object():
-    assert False
+@timed(1)
+@with_setup(setup_child_conn_and_callback)
+def test_vtkTimerCallback_execute_does_not_block():
+    "vtkTimerCallback.execute doesn't block on empty pipe."
+    p = multiprocessing.Process(
+        target=Tns.vtc.execute, args=(Mock(), Mock()))
+    p.start()
+    p.join(2)
 
-@with_setup()
-def test_add_actors_to_scene():
-    assert False
+@with_setup(setup_patch_visualisation_functions, teardown_patch_visualisation_functions)
+def test_visualisation_process_f_side_effects():
+    """The process initialization function calls all setup functions."""
+    global LOGGER
+    mock_pipe, mock_logger = Mock(), Mock()
+    ui.graphical.visualisation.visualisation_process_f(mock_pipe,
+                                                       mock_logger)
+    ui.graphical.visualisation.add_actors_to_scene = Mock()
+    ui.graphical.visualisation.prepare_render_env = Mock()
+    ui.graphical.visualisation.setup_timer = Mock(return_value=1)
+    assert Tns.setup_vis_mock.called
+    assert ui.graphical.visualisation.LOGGER is mock_logger
+    assert Tns.add_actors_mock.called
+    assert Tns.prepare_env_mock.called
+    assert Tns.setup_timer_mock.called
 
-@with_setup()
-def test_prepare_render_env():
-    assert False
+# @with_setup()
+# def test_setup_visualisation():
+#    "Return values are linked renderer, window and interactor"
+#     assert False
 
-@with_setup()
-def test_setup_timer():
-    assert False
+# @with_setup()
+# def test_map_source_object():
+#     assert False
+
+# @with_setup()
+# def test_add_actors_to_scene():
+#     assert False
+
+# @with_setup()
+# def test_prepare_render_env():
+#     assert False
+
+# @with_setup()
+# def test_setup_timer():
+#     assert False
 
 #######################################
 # Network structure drawing functions #

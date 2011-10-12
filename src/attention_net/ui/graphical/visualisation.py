@@ -141,6 +141,10 @@ class vtkTimerCallback(object):
 
 
 def visualisation_process_f(child_conn, logger):
+    """Function called when main() creates the visualisation process
+    through multiprocessing.Process. The parameters are the pipe frrom
+    which to read visualisation updates and the logger to use."""
+    global LOGGER
     LOGGER = logger
     log_tick("start visu")
     REN, REN_WIN, I_REN = setup_visualisation()
