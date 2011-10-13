@@ -10,6 +10,7 @@ from nose.tools import eq_, raises, timed, nottest
 import ui.graphical.visualisation
 from ui.graphical.visualisation import *
 from ui.graphical.visualisation import VisualisableNetworkStructure as VNS
+import vtk
 
 DUMMY_LOGGER = logging.getLogger("testLogger")
 DUMMY_LOGGER.addHandler(NullHandler())
@@ -174,8 +175,7 @@ def test_visualisation_process_f_side_effects():
     """The process initialization function calls all setup functions."""
     global LOGGER
     mock_pipe, mock_logger = Mock(), Mock()
-    ui.graphical.visualisation.visualisation_process_f(mock_pipe,
-                                                       mock_logger)
+    visualisation_process_f(mock_pipe, mock_logger)
     ui.graphical.visualisation.add_actors_to_scene = Mock()
     ui.graphical.visualisation.prepare_render_env = Mock()
     ui.graphical.visualisation.setup_timer = Mock(return_value=1)
@@ -185,26 +185,52 @@ def test_visualisation_process_f_side_effects():
     assert Tns.prepare_env_mock.called
     assert Tns.setup_timer_mock.called
 
-# @with_setup()
-# def test_setup_visualisation():
-#    "Return values are linked renderer, window and interactor"
-#     assert False
+def test_setup_visualisation():
+   """Return values are renderer, window and interactor linked
+   together."""
+   r, w, i = setup_visualisation()
+   assert isinstance(r, vtk.vtkRenderer)
+   assert isinstance(w, vtk.vtkRenderWindow)
+   assert isinstance(i, vtk.vtkRenderWindowInteractor)
+   assert r is w.GetRenderers().GetFirstRenderer()
+   assert w is i.GetRenderWindow()
 
-# @with_setup()
-# def test_map_source_object():
-#     assert False
+def test_map_source_object():
+    "Returns actor -> mapper -> object."
+    obj = vtk.vtkPointSource()
+    m, a = map_source_object(obj)
+    assert isinstance(m.GetInput(), vtk.vtkObject)
+    assert m is a.GetMapper()
 
-# @with_setup()
-# def test_add_actors_to_scene():
-#     assert False
+def test_add_actors_to_scene():
+    "add_actors_to_scene calls renderer.AddActor for all actors."
+    r = Mock()
+    r.AddActor = Mock(spec=vtk.vtkRenderer.AddActor)
+    add_actors_to_scene(r, 1)
+    r.AddActor.assert_called_with(1)
+    r = Mock()
+    add_actors_to_scene(r, 2, 3, 4)
+    assert r.method_calls == [("AddActor", (2,)), ("AddActor", (3,)),
+                              ("AddActor", (4,))]
 
-# @with_setup()
-# def test_prepare_render_env():
-#     assert False
+def test_prepare_render_env():
+    "prepare_render_env calls interactor.Initialize and win.Render."
+    m = Mock()
+    prepare_render_env(m, m)
+    assert m.Initialize.called
+    assert m.Render.called
 
-# @with_setup()
-# def test_setup_timer():
-#     assert False
+def test_setup_timer():
+    vtkTimerCallback_patch = patch("ui.graphical.visualisation.vtkTimerCallback")
+    vtkTimerCallback_mock = vtkTimerCallback_patch.start()
+    m = Mock()
+    vtkTimerCallback_mock.return_value = m
+    setup_timer(m, 1, 2)
+    vtkTimerCallback_patch.stop()
+    assert vtkTimerCallback_mock.call_args_list == [((1,2),{})]
+    assert m.method_calls[0] == ("AddObserver", 
+                                 ("TimerEvent", m.execute), {})
+    assert m.method_calls[1][0] == "CreateRepeatingTimer"
 
 #######################################
 # Network structure drawing functions #
