@@ -80,15 +80,16 @@ class PynnToVisuAdapter(object):
     def add_pynn_projection(self, sending_population,
                             receiving_population,
                             connection_manager):
-        """Creates a 
-        The connection_manager parameter expects a
-        pyNN.nest.simulator.ConnectionManager, it can be obtrained by
+        """Records a projection from sending_population to
+        receiving_population. The connection_manager parameter
+        expects a pyNN.nest.simulator.ConnectionManager, it can be
+        obtrained by
         pyNN.nest.simulator.Projection.connection_manager.
         """
         self.assert_open()
         w = connection_manager.get("weight", "array")
         n_send, n_recv = w.shape
-        for i in range(0, n_send-1):
+        for i in range(0, n_send):
             pynn_u = sending_population[i]
             # list of tuples containing the sending unit's global
             # index (same for each tuple), the global indices of the

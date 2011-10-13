@@ -62,6 +62,14 @@ class VisualisableNetworkStructure(object):
         # abstract connectivity (between maps)
         self.maps_conn = list()
 
+    def __eq__(self, other):
+        """Structural comparison of the networks and comparison of the
+        IDs of units and names of maps."""
+        return (set(self.units) == set(other.units) 
+                and self.maps == other.maps
+                and set(self.units_conn) == set(other.units_conn)
+                and set(self.maps_conn) == set(other.maps_conn))
+
     def add_unit(self, unit, assign_map = None):
         """appends a unit to the global list of units and to the
         assigned map's units list."""
@@ -76,7 +84,7 @@ class VisualisableNetworkStructure(object):
             raise self.UnitNotFoundError()
         if assign_map not in self.maps:
             self.maps[assign_map]=[]
-        self.maps[assign_map].append(unit)
+        self.maps[assign_map].append(int(unit))
     
     def add_population(self, iterable_population, override_map = None):
         """appends a group of units to the list of units."""

@@ -12,6 +12,7 @@ from ui.graphical.visualisation import *
 from ui.graphical.visualisation import VisualisableNetworkStructure as VNS
 import vtk
 
+multiprocessing.get_logger().addHandler(NullHandler())
 DUMMY_LOGGER = logging.getLogger("testLogger")
 DUMMY_LOGGER.addHandler(NullHandler())
 V = None
@@ -44,6 +45,70 @@ nottest(test_VNS_)
 
 @with_setup(setup_units)
 @with_setup(setup_vns)
+def test_VNS___eq__():
+    "Equality of two VisualisableNetworkStructures."
+    u1, u2 = VNS.Unit(1, 1, 2), VNS.Unit(2, 3, 2)
+    V.add_population(iter(Tns.vns_units))
+    V.connect_units(Tns.vns_units[0], Tns.vns_units[1], -1)
+    V.connect_units(Tns.vns_units[1], Tns.vns_units[0], 0.3)
+    V.add_unit(u1, "bar")
+    V.add_unit(u2, "foo")
+    V.connect_maps("bar", "foo")
+    w = VNS(DUMMY_LOGGER)
+    w.add_unit(u2, "foo")
+    w.add_population(iter(Tns.vns_units))
+    w.add_unit(u1, "bar")
+    w.connect_units(Tns.vns_units[0], Tns.vns_units[1], -1)
+    w.connect_units(Tns.vns_units[1], Tns.vns_units[0], 0.3)
+    w.connect_maps("bar", "foo")
+    assert V == w
+
+@with_setup(setup_units)
+@with_setup(setup_vns)
+def test_VNS_not__eq__():
+    "Inequality of two VisualisableNetworkStructures."
+    u1, u2 = VNS.Unit(1, 1, 2), VNS.Unit(2, 3, 2)
+    V.add_population(iter(Tns.vns_units))
+    V.connect_units(Tns.vns_units[0], Tns.vns_units[1], -1)
+    V.connect_units(Tns.vns_units[1], Tns.vns_units[0], 0.3)
+    V.add_unit(u1, "bar")
+    V.add_unit(u2, "foo")
+    V.connect_maps("bar", "foo")
+    w = VNS(DUMMY_LOGGER)
+    w.add_unit(u2, "foo")
+    w.add_population(iter(Tns.vns_units))
+    w.add_unit(u1, "bar")
+    w.connect_units(Tns.vns_units[0], Tns.vns_units[1], 1) # changed
+    w.connect_units(Tns.vns_units[1], Tns.vns_units[0], 0.3)
+    w.connect_maps("bar", "foo") 
+    x = VNS(DUMMY_LOGGER)
+    x.add_unit(u2, "foo")
+    x.add_population(iter(Tns.vns_units))
+    x.add_unit(u1, "lol") # changed
+    x.connect_units(Tns.vns_units[0], Tns.vns_units[1], -1)
+    x.connect_units(Tns.vns_units[1], Tns.vns_units[0], 0.3)
+    x.connect_maps("bar", "foo")
+    y = VNS(DUMMY_LOGGER)
+    y.add_unit(u2, "foo")
+    y.add_population(iter(Tns.vns_units))
+    y.add_unit(u1, "bar")
+    # y.connect_units(Tns.vns_units[0], Tns.vns_units[1], -1) changed
+    y.connect_units(Tns.vns_units[1], Tns.vns_units[0], 0.3)
+    y.connect_maps("bar", "foo")
+    z = VNS(DUMMY_LOGGER)
+    z.add_unit(u2, "foo")
+    z.add_population(iter(Tns.vns_units))
+    z.add_unit(u1, "bar")
+    z.connect_units(Tns.vns_units[0], Tns.vns_units[1], -1)
+    z.connect_units(Tns.vns_units[1], Tns.vns_units[0], 0.3)
+    z.connect_maps("bar", "faz") # changed
+    assert V != w
+    assert V != x
+    assert V != y
+    assert V != z
+
+@with_setup(setup_units)
+@with_setup(setup_vns)
 def test_VNS_add_unit():
     "add_unit is complete and correct."
     assert len(V.units) == 0
@@ -68,10 +133,10 @@ def test_VNS_assign_unit_to_map_raises_():
 @with_setup(setup_units)
 @with_setup(setup_vns)
 def test_VNS_assign_unit_to_map():
-    "The maps of unit names get filled."
+    "The mapping of units assignments to maps gets filled."
     V.add_unit(Tns.vns_units[0], "bar")
     V.add_unit(Tns.vns_units[1], "bar")
-    assert V.maps["bar"] == [Tns.vns_units[0], Tns.vns_units[1]]
+    assert V.maps["bar"] == [Tns.vns_units[0].unit_id, Tns.vns_units[1].unit_id]
 
 @with_setup(setup_units)
 @with_setup(setup_vns)
