@@ -15,6 +15,10 @@ LOGGER = None # initialized by the child visualization process, should
               # be the muiltiprocessing module's logger because of
               # conccurent access
 
+################################
+# VisualisableNetworkStructure #
+################################
+
 # Consiser using protocol buffers to pickle that if python's pickling
 # causes problems
 class VisualisableNetworkStructure(object):
@@ -115,6 +119,10 @@ class VisualisableNetworkStructure(object):
         """indicates a general pattern of cnnectivity from one map to
         the other"""
         self.maps_conn.append((snd_map, rcv_map))
+
+###########################
+# General setup functions #
+###########################
 
 # So visualization and processing are two different processes.
 # The simulation process may yield() a state display update every n epochs,
