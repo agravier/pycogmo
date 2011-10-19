@@ -9,6 +9,7 @@ from nose import with_setup
 from nose.tools import eq_, raises, timed, nottest
 import ui.graphical.visualisation
 from ui.graphical.visualisation import *
+from ui.graphical.visualisation import VisualisableNetwork as VN
 from ui.graphical.visualisation import VisualisableNetworkStructure as VNS
 import vtk
 
@@ -196,6 +197,54 @@ def test_VNS_connect_maps():
     V.add_unit(VNS.Unit(2, 3, 2), "foo")
     V.connect_maps("bar", "foo")
     assert V.maps_conn == [("bar", "foo")]
+
+#######################
+# VisualisableNetwork #
+#######################
+
+def setup_vn():
+    setup_vns()
+    Tns.l_id, Tns.l_x, Tns.l_y, Tns.l_z = xrange(5, 20), xrange(3, 18), \
+        xrange(0,30,2), itertools.repeat(-1,15)
+    Tns.vns_units = [VNS.Unit(u_id, x, y, z) 
+        for (u_id, x, y, z) in itertools.izip(Tns.l_id, Tns.l_x, Tns.l_y, Tns.l_z)]
+    it = iter(Tns.vns_units)
+    V.add_population(it, "pop")
+    V.connect_units(Tns.vns_units[0], Tns.vns_units[1], -1)
+    V.connect_units(Tns.vns_units[1], Tns.vns_units[0], 0.3)
+    Tns.vn = VisualisableNetwork(V)
+
+
+def main():
+    setup_vn()
+    aPolyVertexGrid = Tns.vn.represent_map("pop")
+    aPolyVertexMapper = vtk.vtkDataSetMapper()
+    aPolyVertexMapper.SetInput(aPolyVertexGrid)
+    aPolyVertexActor = vtk.vtkActor()
+    aPolyVertexActor.SetMapper(aPolyVertexMapper)
+#    aPolyVertexActor.AddPosition(2, 0, 6)
+#    aPolyVertexActor.GetProperty().SetDiffuseColor(1, 1, 1)
+    # Create the usual rendering stuff.
+    ren = vtk.vtkRenderer()
+    renWin = vtk.vtkRenderWindow()
+    renWin.AddRenderer(ren)
+#    renWin.SetSize(300, 150)
+    iren = vtk.vtkRenderWindowInteractor()
+    iren.SetRenderWindow(renWin)
+    ren.SetBackground(.1, .2, .4)
+    ren.AddActor(aPolyVertexActor)
+#    ren.ResetCamera()
+    # ren.GetActiveCamera().Azimuth(30)
+    # ren.GetActiveCamera().Elevation(20)
+    # ren.GetActiveCamera().Dolly(2.8)
+#    ren.ResetCameraClippingRange()
+    # Render the scene and start interaction.
+    iren.Initialize()
+    renWin.Render()
+    iren.Start()
+
+if __name__ == "__main__":
+    main()
 
 ###########################
 # general setup functions #

@@ -4,6 +4,7 @@ import pyNN.nest as pynnn
 # from pyNN.recording.files import HDF5ArrayFile needs cython and
 # tables (=pain) 
 from pyNN.utility import init_logging
+import cPickle as pickle
 import logging
 import multiprocessing # because threading will not bypass the GIL
 import sys

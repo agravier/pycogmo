@@ -34,7 +34,7 @@ class PynnToVisuAdapter(object):
             raise AdapterLockedError()
             
     def commit_structure(self):
-        """Adds all units to the outout network structure, sorted by
+        """Adds all units to the output network structure, sorted by
         PyNN ID, and closes the adapter to prevent further structural
         change."""
         self.assert_open()
@@ -105,7 +105,7 @@ class PynnToVisuAdapter(object):
                                         receiving_population.label))
 
     def convert_weight(self, w):
-        """ Converts pyNN weights by normalizing them from their
+        """Converts pyNN weights by normalizing them from their
         natural range to [-1, 1]."""
         # TODO: this is a dummy method. it should prompt pyNN for the
         # range and use a sigmoidal adjustment.

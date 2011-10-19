@@ -1,5 +1,6 @@
 #!/usr/bin/env python2
 
+import cPickle as picke
 import datetime
 import logging
 import multiprocessing # because threading will not bypass the GIL
@@ -13,7 +14,12 @@ from common.utils import log_tick
 
 LOGGER = None # initialized by the child visualization process, should
               # be the muiltiprocessing module's logger because of
-              # conccurent access
+              # conccurent access.
+
+NETWORK = None # The VisualisableNetwork that is a VTK source for
+               # network display.
+
+REN, REN_WIN, I_REN = None, None, None
 
 ################################
 # VisualisableNetworkStructure #
@@ -40,6 +46,8 @@ class VisualisableNetworkStructure(object):
             self.unit_id = unit_id
             self.x, self.y, self.z = x, y, z
         def __eq__(self, other):
+            if isinstance(other, (int, long)):
+                return self.unit_id == other
             e = self.unit_id == other.unit_id
             if e and (self.x != other.x or self.y != other.y or \
                       self.z != other.y):
@@ -52,6 +60,11 @@ class VisualisableNetworkStructure(object):
             return e
         def __int__(self):
             return self.unit_id
+        @property
+        def coords(self):
+            if self.z is None:
+                return (self.x, self.y)
+            return (self.x, self.y, self.z)
     
     def __init__(self, logger):
         self.logger = logger
@@ -116,26 +129,67 @@ class VisualisableNetworkStructure(object):
             self.connect_units(*c)
 
     def connect_maps(self, snd_map, rcv_map):
-        """indicates a general pattern of cnnectivity from one map to
+        """indicates a general pattern of connectivity from one map to
         the other"""
         self.maps_conn.append((snd_map, rcv_map))
+
+#######################
+# VisualisableNetwork #
+#######################
+
+class VisualisableNetwork(object):
+    """"Includes connections weights and units activity
+    information."""
+    def __init__(self, net_struct):
+        "Initialize with the given VisualisableNetworkStructure."
+        self.network_structure = net_struct
+        # vtk_units[x] contains a tuple (pts, vtk_id) where pts is a
+        # vtkPoints or a vtkPoints2D, vtk_id is a long that lets us do
+        # a = [0, 0]
+        # pts.GetPoint(vtk_id, a)
+        self.vtk_units = [None] * len(net_struct.units)
+    
+    def represent_map(self, map_name):
+        """Creates the vtkPoints collection of points representing the
+        network map given in parameter (map name). Registers the points
+        in the right position in the ordered vtk_units list."""
+        net_struct_u = self.network_structure.units
+        u_gids = self.network_structure.maps[map_name]
+        pts = None
+        if len(net_struct_u[net_struct_u.index(u_gids[0])].coords) == 2:
+            pts = vtk.vtkPoints2D()
+        else:
+            pts = vtk.vtkPoints()
+        grid = vtk.vtkUnstructuredGrid()     
+        for p_gid in u_gids:
+            p_i = net_struct_u.index(p_gid)
+            coords = net_struct_u[p_i].coords
+            print coords
+            vtk_id = pts.InsertNextPoint(coords)
+            self.vtk_units[p_i] = (grid, vtk_id)
+        # vtkPoints (-> vtkPolyVertex?) -> vtkUnstructuredGrid
+        grid.SetPoints(pts)
+        return grid
+            
 
 ###########################
 # General setup functions #
 ###########################
 
-# So visualization and processing are two different processes.
-# The simulation process may yield() a state display update every n epochs,
-# to be piped into the visualisation process. Messaging may work the other way
-# to control the simulation and the diplay (e.g. update frequency)
+# So visualization and processing are two different processes.  The
+# simulation process may yield() a state display update every n
+# epochs, to be piped into the visualisation process. Messaging may
+# work the other way to control the simulation and the diplay
+# (e.g. update frequency)
 
 class vtkTimerCallback(object):
-    def __init__(self, input_pipe, disk):
+    def __init__(self, input_pipe):
         self.timer_count = 0
         self.child_conn = input_pipe
-        self.disk = disk
+        self.network = None
  
     def execute(self,obj,event):
+        global LOGGER, NETWORK, REN, REN_WIN, I_REN
         log_tick("vtkTimerCallback exec " + str(self.timer_count))
         # Non-blocking periodic reading of the pipe TODO: add code
         # that dynamically adjusts the periodicity of checking to a
@@ -143,16 +197,18 @@ class vtkTimerCallback(object):
         # learning rate 0.1, not more because will swing around stable
         # point.  Bounded, 1ms to 2sec?
         if (not self.child_conn.poll()):
-            log_tick("the pipeline is empty, returning")
+            log_tick("The pipeline is empty, returning")
             return
-        r = self.child_conn.recv()
-        if r<=0:
-             exit()
-        log_tick("tick received")
-        self.disk.SetInnerRadius(1-r/100.)
-        #actor.SetPosition(self.timer_count, self.timer_count,0);
-        iren = obj
-        iren.GetRenderWindow().Render()
+        r = interpret_visualisation_message(self.child_conn.recv())
+        if r:
+            NETWORK = r
+            LOGGER.info("Network structure received.")
+            m, a = map_source_object(NETWORK)
+            add_actors_to_scene(REN, a)
+            prepare_render_env(REN_WIN, I_REN)
+            I_REN.Start()
+        else:
+            I_REN.GetRenderWindow().Render()
         self.timer_count += 1
 
 
@@ -160,18 +216,13 @@ def visualisation_process_f(child_conn, logger):
     """Function called when main() creates the visualisation process
     through multiprocessing.Process. The parameters are the pipe frrom
     which to read visualisation updates and the logger to use."""
-    global LOGGER
+    global LOGGER, REN, REN_WIN, I_REN
     LOGGER = logger
     log_tick("start visu")
     REN, REN_WIN, I_REN = setup_visualisation()
     REN.SetBackground(0.5, 0.5, 0.5)
-    d = make_disk(2,1)
-    m, a = map_source_object(d)
-    add_actors_to_scene(REN, a)
-    prepare_render_env(REN_WIN, I_REN)
     timer_id = setup_timer(I_REN, child_conn, d)
-    I_REN.Start()
-
+    
 
 
 # set up a vtk pipeline
@@ -210,10 +261,46 @@ def prepare_render_env(render_window, window_interactor):
     render_window.Render()
     log_tick("after render")
 
-def setup_timer(window_interactor, input_conn, disk_to_update):
-    callback = vtkTimerCallback(input_conn, disk_to_update)
+def setup_timer(window_interactor, input_conn):
+    callback = vtkTimerCallback(input_conn)
     window_interactor.AddObserver("TimerEvent", callback.execute)
     return window_interactor.CreateRepeatingTimer(100)
+
+####################
+# IPC and protocol #
+####################
+
+class ControlMessage(dict):
+    def __init__(self, **kwds):
+        self.update(kwds)
+    def __getattr__(self, attr):
+        if self.has_key(attr):
+            return self[attr]
+        else:
+            return None
+
+# def make_pickler(pipe_out):
+#     return pickle.Pickler(pipe_out, pickle.HIGHEST_PROTOCOL)
+
+# def make_unpickler(pipe_in):
+#     return pickle.Unpickler(pipe_in)
+
+# Message handling on the visualizer side
+
+def interpret_visualisation_message(received_object):
+    """Used by the visualisation process to trigger the action
+    associated with a message received from the simulation process."""
+    if isinstance(received_object, ControlMessage):
+        handle_visualisation_control(received_object)
+
+def handle_visualisation_control(obj):
+    if (obj["exit"]):
+        exit()
+
+# Message handling on the main() simulation side
+
+def interpret_control_message(received_object):
+    pass
 
 if __name__ == "__main__":
     # Insert unit tests here
