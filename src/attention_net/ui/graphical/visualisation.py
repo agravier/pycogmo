@@ -151,8 +151,9 @@ class VisualisableNetwork(object):
     
     def represent_map(self, map_name):
         """Creates the vtkPoints collection of points representing the
-        network map given in parameter (map name). Registers the points
-        in the right position in the ordered vtk_units list."""
+        network map given in parameter (map name), and the wrapping
+        vtkPolyVertex and vtkUnstructuredGrid. Registers the points in
+        the right position in the ordered vtk_units list."""
         net_struct_u = self.network_structure.units
         u_gids = self.network_structure.maps[map_name]
         pts = None
@@ -160,17 +161,24 @@ class VisualisableNetwork(object):
             pts = vtk.vtkPoints2D()
         else:
             pts = vtk.vtkPoints()
-        grid = vtk.vtkUnstructuredGrid()     
+        grid = vtk.vtkUnstructuredGrid()
+        pv = vtk.vtkPolyVertex()
+        l = []
         for p_gid in u_gids:
             p_i = net_struct_u.index(p_gid)
             coords = net_struct_u[p_i].coords
             print coords
-            vtk_id = pts.InsertNextPoint(coords)
-            self.vtk_units[p_i] = (grid, vtk_id)
-        # vtkPoints (-> vtkPolyVertex?) -> vtkUnstructuredGrid
+            l.append(pts.InsertNextPoint(coords))
+            self.vtk_units[p_i] = (grid, l[len(l)-1])
+        # necessay if using SetId and not InsertId in the next loop:
+        pv.GetPointIds().SetNumberOfIds(len(l)) 
+        for i in range(len(l)):
+            pv.GetPointIds().SetId(i, l[i])
+        # vtkPoints -> vtkPolyVertex -> vtkUnstructuredGrid
+        grid.InsertNextCell(pv.GetCellType(), pv.GetPointIds())
         grid.SetPoints(pts)
         return grid
-            
+
 
 ###########################
 # General setup functions #
