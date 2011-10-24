@@ -217,7 +217,7 @@ def setup_vn():
 
 def main():
     setup_vn()
-    aPolyVertexGrid = Tns.vn.represent_map("pop")
+    aPolyVertexGrid = Tns.vn.represent_map("pop")[0]
     aPolyVertexMapper = vtk.vtkDataSetMapper()
     aPolyVertexMapper.SetInput(aPolyVertexGrid)
     aPolyVertexActor = vtk.vtkActor()
@@ -241,6 +241,11 @@ def main():
     # Render the scene and start interaction.
     iren.Initialize()
     renWin.Render()
+    import time
+    time.sleep(2)
+    Tns.vn.update_scalars([aPolyVertexGrid], 
+                          [len(Tns.l_id)], 
+                          [a/20 for a in Tns.l_x])
     iren.Start()
 
 if __name__ == "__main__":

@@ -177,8 +177,24 @@ class VisualisableNetwork(object):
         # vtkPoints -> vtkPolyVertex -> vtkUnstructuredGrid
         grid.InsertNextCell(pv.GetCellType(), pv.GetPointIds())
         grid.SetPoints(pts)
-        return grid
+        return (grid, len(l))
 
+    def update_scalars(self, grids, lengths, scalars_list):
+        """grids and lengths are two complementary lists, g is a list
+        of vtkUnstructuredGrid, lengths is the list of the number n of
+        units in each g, and scalars_list is the list of updated values
+        for all units in all grids g. scalars_list is ordered following the
+        grid_lengths list of grids. The method updates the scalar
+        vaues of all units in all grids using scalars_list."""
+        m = 0
+        for i in range(len(grids)): 
+            l = lengths[i]
+            scalars_slice = scalars_list[m:l]
+            m = l
+            vtk_scalars = vtk.vtkFloatArray()
+            for j in range(l):
+                vtk_scalars.InsertNextValue(scalars_slice[j])
+            grids[i].GetPointData().SetScalars(vtk_scalars)
 
 ###########################
 # General setup functions #
