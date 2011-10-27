@@ -204,48 +204,57 @@ def test_VNS_connect_maps():
 
 def setup_vn():
     setup_vns()
-    Tns.l_id, Tns.l_x, Tns.l_y, Tns.l_z = xrange(5, 20), xrange(3, 18), \
-        xrange(0,30,2), itertools.repeat(-1,15)
-    Tns.vns_units = [VNS.Unit(u_id, x, y, z) 
-        for (u_id, x, y, z) in itertools.izip(Tns.l_id, Tns.l_x, Tns.l_y, Tns.l_z)]
-    it = iter(Tns.vns_units)
+    Tns.p1_l_id, Tns.p1_l_x, Tns.p1_l_y, Tns.p1_l_z = range(0, 15*15), range(3, 18)*15, \
+        range(0,30,2)*15, itertools.repeat(-1,15*15);
+    Tns.p1_l_y.sort()
+    Tns.p1_vns_units = [VNS.Unit(u_id, x, y, z) 
+        for (u_id, x, y, z) in itertools.izip(Tns.p1_l_id, Tns.p1_l_x, Tns.p1_l_y, Tns.p1_l_z)]
+    it = iter(Tns.p1_vns_units)
     V.add_population(it, "pop")
-    V.connect_units(Tns.vns_units[0], Tns.vns_units[1], -1)
-    V.connect_units(Tns.vns_units[1], Tns.vns_units[0], 0.3)
+    Tns.p2_l_id, Tns.p2_l_x, Tns.p2_l_y, Tns.p2_l_z = range(15*15+3, 15*15*2+3), range(0, 15)*15, \
+        range(0,30,2)*15, itertools.repeat(0,15*15);
+    Tns.p2_l_y.sort()
+    Tns.p2_vns_units = [VNS.Unit(u_id, x, y, z) 
+        for (u_id, x, y, z) in itertools.izip(Tns.p2_l_id, Tns.p2_l_x, Tns.p2_l_y, Tns.p2_l_z)]
+    it2 = iter(Tns.p2_vns_units)
+    V.add_population(it2, "pop2")
+    V.connect_units(Tns.p1_vns_units[0], Tns.p2_vns_units[1], -1)
+    V.connect_units(Tns.p1_vns_units[1], Tns.p2_vns_units[0], 0.3)
     Tns.vn = VisualisableNetwork(V)
 
 
 def main():
     setup_vn()
-    aPolyVertexGrid = Tns.vn.represent_map("pop")[0]
-    aPolyVertexMapper = vtk.vtkDataSetMapper()
-    aPolyVertexMapper.SetInput(aPolyVertexGrid)
-    aPolyVertexActor = vtk.vtkActor()
-    aPolyVertexActor.SetMapper(aPolyVertexMapper)
-#    aPolyVertexActor.AddPosition(2, 0, 6)
-#    aPolyVertexActor.GetProperty().SetDiffuseColor(1, 1, 1)
+    aPolyVertexGrid1 = Tns.vn.represent_map("pop")[0]
+    Tns.vn.update_scalars([aPolyVertexGrid1], 
+                          [len(Tns.p1_l_id)], 
+                          [a/20. for a in Tns.p1_l_x])
+    aPolyVertexGrid2 = Tns.vn.represent_map("pop2")[0]
+    # aPolyVertexActor = Tns.vn.make_actor_for_grid(aPolyVertexGrid)
+    # aPolyVertexActor2 = Tns.vn.make_actor_for_grid(aPolyVertexGrid2)
+    lvl_to_g = {0:[aPolyVertexGrid1, aPolyVertexGrid2]}
+    #lvl_to_g = Tns.vn.levels_to_grids()
+    all_actors = Tns.vn.make_all_actors(lvl_to_g)
     # Create the usual rendering stuff.
     ren = vtk.vtkRenderer()
     renWin = vtk.vtkRenderWindow()
     renWin.AddRenderer(ren)
-#    renWin.SetSize(300, 150)
+    renWin.SetSize(1024, 768)
     iren = vtk.vtkRenderWindowInteractor()
     iren.SetRenderWindow(renWin)
-    ren.SetBackground(.1, .2, .4)
-    ren.AddActor(aPolyVertexActor)
-#    ren.ResetCamera()
-    # ren.GetActiveCamera().Azimuth(30)
-    # ren.GetActiveCamera().Elevation(20)
-    # ren.GetActiveCamera().Dolly(2.8)
-#    ren.ResetCameraClippingRange()
+    ren.SetBackground(.0, .0, .0)
+    for a in all_actors:
+        ren.AddActor(a)
+    ren.ResetCamera()
+    ren.GetActiveCamera().Azimuth(00)
+    ren.GetActiveCamera().Elevation(-40)
+    ren.GetActiveCamera().Dolly(0)
+    ren.ResetCameraClippingRange()
     # Render the scene and start interaction.
     iren.Initialize()
     renWin.Render()
     import time
-    time.sleep(2)
-    Tns.vn.update_scalars([aPolyVertexGrid], 
-                          [len(Tns.l_id)], 
-                          [a/20 for a in Tns.l_x])
+    time.sleep(0.1)
     iren.Start()
 
 if __name__ == "__main__":

@@ -2,6 +2,7 @@
 
 import cPickle as picke
 import datetime
+import itertools
 import logging
 import multiprocessing # because threading will not bypass the GIL
 import os
@@ -52,7 +53,8 @@ class VisualisableNetworkStructure(object):
             if e and (self.x != other.x or self.y != other.y or \
                       self.z != other.y):
                 global LOGGER
-                LOGGER.error("Units with ID %i and %i and coordinates %s and %s can't co-exist.",
+                LOGGER.error(("Units with ID %i and %i and "
+                             "coordinates %s and %s can't co-exist."),
                              self.unit_id, other.unit_id, 
                              (self.x, self.y, self.z), 
                              (other.x, other.y, other.z))
@@ -72,12 +74,14 @@ class VisualisableNetworkStructure(object):
         # used when transmitting activity updates.
         self.units = list()
         # info about the conceptual grouping of units, a dict of
-        # (name of the map, list of unit global indices)
+        # (UNIQUE ID of the map, list of unit global indices)
         self.maps = dict()
         # detailed connectivity (unit-to-unit)
         self.units_conn = list()
-        # abstract connectivity (between maps)
+        # abstract connectivity (between maps UNIQUE IDs)
         self.maps_conn = list()
+        # aliases for maps: dict(map ID, alias)
+        self.maps_aliases = dict()
 
     def __eq__(self, other):
         """Structural comparison of the networks and comparison of the
@@ -133,6 +137,10 @@ class VisualisableNetworkStructure(object):
         the other"""
         self.maps_conn.append((snd_map, rcv_map))
 
+    def map_alias(self, m, alias):
+        "Register alias for map m"
+        self.maps_aliases[m] = alias
+
 #######################
 # VisualisableNetwork #
 #######################
@@ -143,11 +151,18 @@ class VisualisableNetwork(object):
     def __init__(self, net_struct):
         "Initialize with the given VisualisableNetworkStructure."
         self.network_structure = net_struct
+        self.lut = vtk.vtkColorTransferFunction(); 
+        self.lut.SetColorSpaceToHSV()
+        self.lut.SetScaleToLinear()
+        # Work with white and with black bg
+        self.lut.AddHSVPoint(0., 1., 0., 0.5); 
+        self.lut.AddHSVPoint(1., 1., 1., 1.); 
+        self.lut.SetRange(0.,1.)
         # vtk_units[x] contains a tuple (pts, vtk_id) where pts is a
         # vtkPoints or a vtkPoints2D, vtk_id is a long that lets us do
-        # a = [0, 0]
-        # pts.GetPoint(vtk_id, a)
+        # a = [0, 0]; pts.GetPoint(vtk_id, a)
         self.vtk_units = [None] * len(net_struct.units)
+        # maps_actors is a dict(map id, actor representing the map)
     
     def represent_map(self, map_name):
         """Creates the vtkPoints collection of points representing the
@@ -167,7 +182,6 @@ class VisualisableNetwork(object):
         for p_gid in u_gids:
             p_i = net_struct_u.index(p_gid)
             coords = net_struct_u[p_i].coords
-            print coords
             l.append(pts.InsertNextPoint(coords))
             self.vtk_units[p_i] = (grid, l[len(l)-1])
         # necessay if using SetId and not InsertId in the next loop:
@@ -179,6 +193,69 @@ class VisualisableNetwork(object):
         grid.SetPoints(pts)
         return (grid, len(l))
 
+    def make_actor_for_grid(self, grid, translation=[0.,0.,0.]):
+        """returns an actor with an attached mapper for the
+        map_name. scalar data on units is represented by color,
+        translated by the given vector.""" 
+        mapper = vtk.vtkDataSetMapper()
+        mapper.SetInput(grid)
+        mapper.SetColorModeToMapScalars()
+        mapper.SetLookupTable(self.lut); 
+        ## Calls SelectColorArray with a [0,1] range mapping
+        # mapper.SelectColorArray(self.DEFAULT_COLOR_ARRAY)
+        actor = vtk.vtkActor()
+        actor.SetMapper(mapper)
+        actor.AddPosition(translation[0], translation[1], translation[2])
+        return actor
+
+    def make_all_actors(self, levels_to_grids):
+        """Given a dict mapping from desired display level to list
+        of vtkUnstructuredGrid, returns a list of VTK actors, each
+        translated to the desired level, avoiding collision with other
+        grids."""
+        def grid_max_dim(vtk_u_g):
+            b = vtk_u_g.GetBounds()
+            return max(b[1]-b[0], b[3]-b[2], b[5]-b[4])
+        list_of_grids = list(
+            itertools.chain.from_iterable(levels_to_grids.values())) 
+        # Min distance between two grids to avoid collision:
+        largest_grid_dim = max(map(grid_max_dim, list_of_grids))
+        # Create actors, determine translations
+        translated_actors = list() # list of translated actors
+        for lvl in levels_to_grids.keys():
+            # Vertical center of translated grids for this level:
+            z_trans = lvl*largest_grid_dim + largest_grid_dim*lvl*0.1
+            current_lvl_grids = levels_to_grids[lvl]
+            g_trans_list = list()
+            len_cur_lvl_grids = len(current_lvl_grids)
+            for i in range(len_cur_lvl_grids):
+                g = current_lvl_grids[i]
+                g_b = g.GetBounds()
+                g_width = g_b[1] - g_b[0]
+                # Horizontal translation on x with the left corner of
+                # the first grid at x=0 (centered on x=0 after the
+                # loop):
+                g_x_trans = g_width*i+g_width*i*0.2-g_b[0]
+                # Horixontal alignment of the front of the bounding
+                # box of each map along the xz plane (y=0):
+                g_y_trans = -g_b[2]
+                # Vertical adjustment of each grid:
+                g_height = g_b[5]-g_b[4]
+                g_z_trans = z_trans - g_b[4] - g_height/2.
+                g_trans_list.append((g_x_trans, g_y_trans, g_z_trans))
+            # Center x
+            last_bounds = current_lvl_grids[len_cur_lvl_grids-1].GetBounds()
+            x_max = g_trans_list[len_cur_lvl_grids-1][0] + \
+                last_bounds[1] - last_bounds[0]
+            for i in range(len_cur_lvl_grids):
+                translated_actors.append(
+                    self.make_actor_for_grid(
+                        current_lvl_grids[i], 
+                        translation=(g_trans_list[i][0] - x_max/2.,
+                                     g_trans_list[i][1],
+                                     g_trans_list[i][2])))
+        return translated_actors
+    
     def update_scalars(self, grids, lengths, scalars_list):
         """grids and lengths are two complementary lists, g is a list
         of vtkUnstructuredGrid, lengths is the list of the number n of
