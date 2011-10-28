@@ -86,9 +86,10 @@ def main():
     adapter.add_pynn_population(p2)
     adapter.add_pynn_projection(p1, p2, prj1_2.connection_manager)
     adapter.commit_structure()
-    # TODO: here should come the serious IPC.
-    # parent_conn.send(adapter.output_struct)
-
+    
+    parent_conn.send(adapter.output_struct)
+    time.sleep(10)
+    
     # Run the simulator
     pynnn.run(100.0)
     # Cleanup

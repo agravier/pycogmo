@@ -21,7 +21,7 @@ def ensure_dir(f):
 def configure_loggers():
     LOGGER.setLevel(SUBDEBUG)
     debug_handler = logging.StreamHandler()
-    debug_handler.setLevel(INFO)
+    debug_handler.setLevel(SUBDEBUG)
     debug_formatter = logging.Formatter(
         fmt='%(asctime)s - %(levelname)s - %(message)s',
         datefmt='%m-%d %H:%M')

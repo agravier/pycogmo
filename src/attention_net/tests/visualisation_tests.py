@@ -24,12 +24,12 @@ class Tns(object):
 
 def setup_vns():
     global V
-    V = VNS(DUMMY_LOGGER)
+    V = VNS()
 
 def setup_units():
     Tns.l_id, Tns.l_x, Tns.l_y, Tns.l_z = xrange(5, 20), xrange(3, 18), \
         xrange(0,30,2), list(itertools.chain([None], itertools.repeat(-1,14)))
-    Tns.vns_units = [VNS.Unit(u_id, x, y, z) 
+    Tns.vns_units = [Unit(u_id, x, y, z) 
                      for (u_id, x, y, z) in itertools.izip(Tns.l_id, Tns.l_x, Tns.l_y, Tns.l_z)]
 
 ##################################################
@@ -48,14 +48,14 @@ nottest(test_VNS_)
 @with_setup(setup_vns)
 def test_VNS___eq__():
     "Equality of two VisualisableNetworkStructures."
-    u1, u2 = VNS.Unit(1, 1, 2), VNS.Unit(2, 3, 2)
+    u1, u2 = Unit(1, 1, 2), Unit(2, 3, 2)
     V.add_population(iter(Tns.vns_units))
     V.connect_units(Tns.vns_units[0], Tns.vns_units[1], -1)
     V.connect_units(Tns.vns_units[1], Tns.vns_units[0], 0.3)
     V.add_unit(u1, "bar")
     V.add_unit(u2, "foo")
     V.connect_maps("bar", "foo")
-    w = VNS(DUMMY_LOGGER)
+    w = VNS()
     w.add_unit(u2, "foo")
     w.add_population(iter(Tns.vns_units))
     w.add_unit(u1, "bar")
@@ -68,35 +68,35 @@ def test_VNS___eq__():
 @with_setup(setup_vns)
 def test_VNS_not__eq__():
     "Inequality of two VisualisableNetworkStructures."
-    u1, u2 = VNS.Unit(1, 1, 2), VNS.Unit(2, 3, 2)
+    u1, u2 = Unit(1, 1, 2), Unit(2, 3, 2)
     V.add_population(iter(Tns.vns_units))
     V.connect_units(Tns.vns_units[0], Tns.vns_units[1], -1)
     V.connect_units(Tns.vns_units[1], Tns.vns_units[0], 0.3)
     V.add_unit(u1, "bar")
     V.add_unit(u2, "foo")
     V.connect_maps("bar", "foo")
-    w = VNS(DUMMY_LOGGER)
+    w = VNS()
     w.add_unit(u2, "foo")
     w.add_population(iter(Tns.vns_units))
     w.add_unit(u1, "bar")
     w.connect_units(Tns.vns_units[0], Tns.vns_units[1], 1) # changed
     w.connect_units(Tns.vns_units[1], Tns.vns_units[0], 0.3)
     w.connect_maps("bar", "foo") 
-    x = VNS(DUMMY_LOGGER)
+    x = VNS()
     x.add_unit(u2, "foo")
     x.add_population(iter(Tns.vns_units))
     x.add_unit(u1, "lol") # changed
     x.connect_units(Tns.vns_units[0], Tns.vns_units[1], -1)
     x.connect_units(Tns.vns_units[1], Tns.vns_units[0], 0.3)
     x.connect_maps("bar", "foo")
-    y = VNS(DUMMY_LOGGER)
+    y = VNS()
     y.add_unit(u2, "foo")
     y.add_population(iter(Tns.vns_units))
     y.add_unit(u1, "bar")
     # y.connect_units(Tns.vns_units[0], Tns.vns_units[1], -1) changed
     y.connect_units(Tns.vns_units[1], Tns.vns_units[0], 0.3)
     y.connect_maps("bar", "foo")
-    z = VNS(DUMMY_LOGGER)
+    z = VNS()
     z.add_unit(u2, "foo")
     z.add_population(iter(Tns.vns_units))
     z.add_unit(u1, "bar")
@@ -121,10 +121,10 @@ def test_VNS_add_unit():
         i += 1
     assert len(V.units) == len(Tns.vns_units)
     V.assign_unit_to_map = Mock()
-    V.add_unit(VNS.Unit(-1, 1, 2), "bar")
+    V.add_unit(Unit(-1, 1, 2), "bar")
     assert V.assign_unit_to_map.called
 
-@raises(VNS.UnitNotFoundError)
+@raises(UnitNotFoundError)
 @with_setup(setup_units)
 @with_setup(setup_vns)
 def test_VNS_assign_unit_to_map_raises_():
@@ -146,14 +146,14 @@ def test_VNS_add_population():
     V.add_population(iter(Tns.vns_units))
     assert set(V.units) == set(Tns.vns_units)
 
-@raises(VNS.UnitNotFoundError)
+@raises(UnitNotFoundError)
 @with_setup(setup_units)
 @with_setup(setup_vns)
 def test_VNS_connect_units_inexistent_id():
     "connect_units with inexistent units raises UnitNotFoundError."
     V.connect_units(Tns.vns_units[0].unit_id, Tns.vns_units[1].unit_id, 1)
 
-@raises(VNS.UnitNotFoundError)
+@raises(UnitNotFoundError)
 @with_setup(setup_units)
 @with_setup(setup_vns)
 def test_VNS_connect_units_inexistent_unit():
@@ -161,7 +161,7 @@ def test_VNS_connect_units_inexistent_unit():
     V.connect_units(Tns.vns_units[0], Tns.vns_units[1], 1)
 
 
-@raises(VNS.WeightOutOfRangeError)
+@raises(WeightOutOfRangeError)
 @with_setup(setup_units)
 @with_setup(setup_vns)
 def test_VNS_connect_units_wrong_weight():
@@ -193,8 +193,8 @@ def test_VNS_connect_units_list():
 @with_setup(setup_vns)
 def test_VNS_connect_maps():
     "connect_maps correctly modifies maps_conn."
-    V.add_unit(VNS.Unit(1, 1, 2), "bar")
-    V.add_unit(VNS.Unit(2, 3, 2), "foo")
+    V.add_unit(Unit(1, 1, 2), "bar")
+    V.add_unit(Unit(2, 3, 2), "foo")
     V.connect_maps("bar", "foo")
     assert V.maps_conn == [("bar", "foo")]
 
@@ -207,14 +207,14 @@ def setup_vn():
     Tns.p1_l_id, Tns.p1_l_x, Tns.p1_l_y, Tns.p1_l_z = range(0, 15*15), range(3, 18)*15, \
         range(0,30,2)*15, itertools.repeat(-1,15*15);
     Tns.p1_l_y.sort()
-    Tns.p1_vns_units = [VNS.Unit(u_id, x, y, z) 
+    Tns.p1_vns_units = [Unit(u_id, x, y, z) 
         for (u_id, x, y, z) in itertools.izip(Tns.p1_l_id, Tns.p1_l_x, Tns.p1_l_y, Tns.p1_l_z)]
     it = iter(Tns.p1_vns_units)
     V.add_population(it, "pop")
     Tns.p2_l_id, Tns.p2_l_x, Tns.p2_l_y, Tns.p2_l_z = range(15*15+3, 15*15*2+3), range(0, 15)*15, \
         range(0,30,2)*15, itertools.repeat(0,15*15);
     Tns.p2_l_y.sort()
-    Tns.p2_vns_units = [VNS.Unit(u_id, x, y, z) 
+    Tns.p2_vns_units = [Unit(u_id, x, y, z) 
         for (u_id, x, y, z) in itertools.izip(Tns.p2_l_id, Tns.p2_l_x, Tns.p2_l_y, Tns.p2_l_z)]
     it2 = iter(Tns.p2_vns_units)
     V.add_population(it2, "pop2")
@@ -226,9 +226,9 @@ def setup_vn():
 def main():
     setup_vn()
     aPolyVertexGrid1 = Tns.vn.represent_map("pop")[0]
-    Tns.vn.update_scalars([aPolyVertexGrid1], 
-                          [len(Tns.p1_l_id)], 
-                          [a/20. for a in Tns.p1_l_x])
+    Tns.vn.update_scalars([a/20. for a in Tns.p1_l_x],
+                          [aPolyVertexGrid1], 
+                          [len(Tns.p1_l_id)])
     aPolyVertexGrid2 = Tns.vn.represent_map("pop2")[0]
     # aPolyVertexActor = Tns.vn.make_actor_for_grid(aPolyVertexGrid)
     # aPolyVertexActor2 = Tns.vn.make_actor_for_grid(aPolyVertexGrid2)

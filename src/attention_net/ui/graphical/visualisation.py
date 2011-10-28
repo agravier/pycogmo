@@ -26,6 +26,40 @@ REN, REN_WIN, I_REN = None, None, None
 # VisualisableNetworkStructure #
 ################################
 
+class UnitNotFoundError(Exception):
+    pass
+
+class WeightOutOfRangeError(Exception):
+    pass
+
+class Unit(object):
+    def __init__(self, unit_id, x, y, z=None):
+        self.unit_id = unit_id
+        self.x, self.y, self.z = x, y, z
+    def __eq__(self, other):
+        if isinstance(other, (int, long)):
+            return self.unit_id == other
+        e = self.unit_id == other.unit_id
+        if e and (self.x != other.x or self.y != other.y or \
+                  self.z != other.y):
+            global LOGGER
+            LOGGER.error(("Units with ID %i and %i and "
+                         "coordinates %s and %s can't co-exist."),
+                         self.unit_id, other.unit_id, 
+                         (self.x, self.y, self.z), 
+                         (other.x, other.y, other.z))
+            return false
+        return e
+    def __int__(self):
+        return self.unit_id
+    @property
+    def coords(self):
+        if self.z is None:
+            return (self.x, self.y)
+        return (self.x, self.y, self.z)
+    
+
+
 # Consiser using protocol buffers to pickle that if python's pickling
 # causes problems
 class VisualisableNetworkStructure(object):
@@ -36,45 +70,17 @@ class VisualisableNetworkStructure(object):
     units, or anything else. It's the visualisation interface that is
     to make or let the user make these choices."""
     
-    class UnitNotFoundError(Exception):
-        pass
-    
-    class WeightOutOfRangeError(Exception):
-        pass
-    
-    class Unit(object):
-        def __init__(self, unit_id, x, y, z=None):
-            self.unit_id = unit_id
-            self.x, self.y, self.z = x, y, z
-        def __eq__(self, other):
-            if isinstance(other, (int, long)):
-                return self.unit_id == other
-            e = self.unit_id == other.unit_id
-            if e and (self.x != other.x or self.y != other.y or \
-                      self.z != other.y):
-                global LOGGER
-                LOGGER.error(("Units with ID %i and %i and "
-                             "coordinates %s and %s can't co-exist."),
-                             self.unit_id, other.unit_id, 
-                             (self.x, self.y, self.z), 
-                             (other.x, other.y, other.z))
-                return false
-            return e
-        def __int__(self):
-            return self.unit_id
-        @property
-        def coords(self):
-            if self.z is None:
-                return (self.x, self.y)
-            return (self.x, self.y, self.z)
-    
-    def __init__(self, logger):
-        self.logger = logger
-        # all units in consistent order, the same order that is to be
-        # used when transmitting activity updates.
+    def __init__(self):
+        # all units (class Unit) in
+        # consistent order, the same order that is to be used when
+        # receiving activity updates.
         self.units = list()
+        # all maps' unique IDs in the same order that is to be
+        # used when receiving activity updates.
+        self.maps_ids = list()
         # info about the conceptual grouping of units, a dict of
-        # (UNIQUE ID of the map, list of unit global indices)
+        # (UNIQUE ID of the map, list of unit global indices in
+        # activity update reception order)
         self.maps = dict()
         # detailed connectivity (unit-to-unit)
         self.units_conn = list()
@@ -99,18 +105,20 @@ class VisualisableNetworkStructure(object):
 
     def assign_unit_to_map(self, unit, assign_map):
         """Assigns the already existing unit of type
-        VisualisableNetworkStructure.Unit to the given map that may
+        Unit to the given map that may
         need to be created for the occasion."""
         if unit not in self.units:
             raise self.UnitNotFoundError()
         if assign_map not in self.maps:
             self.maps[assign_map]=[]
+        if assign_map not in self.maps_ids:
+            self.maps_ids.append(assign_map)
         self.maps[assign_map].append(int(unit))
     
-    def add_population(self, iterable_population, override_map = None):
+    def add_population(self, iterable_population, override_map_id = None):
         """appends a group of units to the list of units."""
         for u in iterable_population:
-            self.add_unit(u, override_map)
+            self.add_unit(u, override_map_id)
     
     def connect_units(self, snd_unit_id, rcv_unit_id, strength):
         """appends a connection between two units (referenced by their
@@ -151,6 +159,7 @@ class VisualisableNetwork(object):
     def __init__(self, net_struct):
         "Initialize with the given VisualisableNetworkStructure."
         self.network_structure = net_struct
+        self.vtk_units = [None] * len(net_struct.units)
         self.lut = vtk.vtkColorTransferFunction(); 
         self.lut.SetColorSpaceToHSV()
         self.lut.SetScaleToLinear()
@@ -158,30 +167,39 @@ class VisualisableNetwork(object):
         self.lut.AddHSVPoint(0., 1., 0., 0.5); 
         self.lut.AddHSVPoint(1., 1., 1., 1.); 
         self.lut.SetRange(0.,1.)
+        # Build update-ordered representations of network maps
+        self.grids = list()
+        self.grids_lengths = list()
+        for g, l in [self.represent_map(m) for m in
+                     self.network_structure.maps_ids]:
+            self.grids.append(g)
+            self.grids_lengths.append(l)
         # vtk_units[x] contains a tuple (pts, vtk_id) where pts is a
         # vtkPoints or a vtkPoints2D, vtk_id is a long that lets us do
         # a = [0, 0]; pts.GetPoint(vtk_id, a)
-        self.vtk_units = [None] * len(net_struct.units)
         # maps_actors is a dict(map id, actor representing the map)
     
-    def represent_map(self, map_name):
+    def represent_map(self, map_id):
         """Creates the vtkPoints collection of points representing the
         network map given in parameter (map name), and the wrapping
         vtkPolyVertex and vtkUnstructuredGrid. Registers the points in
         the right position in the ordered vtk_units list."""
         net_struct_u = self.network_structure.units
-        u_gids = self.network_structure.maps[map_name]
+        u_gids = self.network_structure.maps[map_id]
         pts = None
-        if len(net_struct_u[net_struct_u.index(u_gids[0])].coords) == 2:
-            pts = vtk.vtkPoints2D()
-        else:
-            pts = vtk.vtkPoints()
+        # if len(net_struct_u[net_struct_u.index(u_gids[0])].coords) == 2:
+        #     pts = vtk.vtkPoints2D()
+        # else:
+        #     pts = vtk.vtkPoints()
+        pts = vtk.vtkPoints()
         grid = vtk.vtkUnstructuredGrid()
         pv = vtk.vtkPolyVertex()
         l = []
         for p_gid in u_gids:
             p_i = net_struct_u.index(p_gid)
             coords = net_struct_u[p_i].coords
+            if len(coords) == 2:
+                coords = (coords[0], coords[1], 0)
             l.append(pts.InsertNextPoint(coords))
             self.vtk_units[p_i] = (grid, l[len(l)-1])
         # necessay if using SetId and not InsertId in the next loop:
@@ -195,8 +213,8 @@ class VisualisableNetwork(object):
 
     def make_actor_for_grid(self, grid, translation=[0.,0.,0.]):
         """returns an actor with an attached mapper for the
-        map_name. scalar data on units is represented by color,
-        translated by the given vector.""" 
+        unstructured grid. scalar data on units is represented by
+        color, translated by the given vector.""" 
         mapper = vtk.vtkDataSetMapper()
         mapper.SetInput(grid)
         mapper.SetColorModeToMapScalars()
@@ -220,6 +238,8 @@ class VisualisableNetwork(object):
             itertools.chain.from_iterable(levels_to_grids.values())) 
         # Min distance between two grids to avoid collision:
         largest_grid_dim = max(map(grid_max_dim, list_of_grids))
+        if largest_grid_dim == 0:
+            largest_grid_dim = 1
         # Create actors, determine translations
         translated_actors = list() # list of translated actors
         for lvl in levels_to_grids.keys():
@@ -231,7 +251,10 @@ class VisualisableNetwork(object):
             for i in range(len_cur_lvl_grids):
                 g = current_lvl_grids[i]
                 g_b = g.GetBounds()
+                g_height = g_b[5]-g_b[4]
                 g_width = g_b[1] - g_b[0]
+                if g_width == 0:
+                    g_width = 1
                 # Horizontal translation on x with the left corner of
                 # the first grid at x=0 (centered on x=0 after the
                 # loop):
@@ -240,7 +263,6 @@ class VisualisableNetwork(object):
                 # box of each map along the xz plane (y=0):
                 g_y_trans = -g_b[2]
                 # Vertical adjustment of each grid:
-                g_height = g_b[5]-g_b[4]
                 g_z_trans = z_trans - g_b[4] - g_height/2.
                 g_trans_list.append((g_x_trans, g_y_trans, g_z_trans))
             # Center x
@@ -256,13 +278,20 @@ class VisualisableNetwork(object):
                                      g_trans_list[i][2])))
         return translated_actors
     
-    def update_scalars(self, grids, lengths, scalars_list):
+    def update_scalars(self, 
+                       scalars_list, 
+                       grids=None, 
+                       lengths=None):
         """grids and lengths are two complementary lists, g is a list
         of vtkUnstructuredGrid, lengths is the list of the number n of
         units in each g, and scalars_list is the list of updated values
         for all units in all grids g. scalars_list is ordered following the
         grid_lengths list of grids. The method updates the scalar
         vaues of all units in all grids using scalars_list."""
+        if grids == None:
+            grids=self.grids
+        if lengths == None:
+            lengths=self.grids_lengths
         m = 0
         for i in range(len(grids)): 
             l = lengths[i]
@@ -300,14 +329,16 @@ class vtkTimerCallback(object):
         if (not self.child_conn.poll()):
             log_tick("The pipeline is empty, returning")
             return
-        r = interpret_visualisation_message(self.child_conn.recv())
+        r = interpret_simu_to_visu_message(self.child_conn.recv())
         if r:
             NETWORK = r
             LOGGER.info("Network structure received.")
-            m, a = map_source_object(NETWORK)
-            add_actors_to_scene(REN, a)
+            lvl_to_g = {0 : NETWORK.grids}
+            # lvl_to_g = Tns.vn.levels_to_grids()
+            all_actors = NETWORK.make_all_actors(lvl_to_g)
+            add_actors_to_scene(REN, all_actors)
+            REN.ResetCamera()
             prepare_render_env(REN_WIN, I_REN)
-            I_REN.Start()
         else:
             I_REN.GetRenderWindow().Render()
         self.timer_count += 1
@@ -321,10 +352,11 @@ def visualisation_process_f(child_conn, logger):
     LOGGER = logger
     log_tick("start visu")
     REN, REN_WIN, I_REN = setup_visualisation()
+    log_tick("after setup_vis")
     REN.SetBackground(0.5, 0.5, 0.5)
-    timer_id = setup_timer(I_REN, child_conn, d)
-    
-
+    log_tick("background set")
+    timer_id = setup_timer(I_REN, child_conn)
+    I_REN.Start()
 
 # set up a vtk pipeline
 def setup_visualisation():
@@ -333,6 +365,7 @@ def setup_visualisation():
     ren_win.AddRenderer(ren)
     iren = vtk.vtkRenderWindowInteractor()
     iren.SetRenderWindow(ren_win)
+    iren.Initialize()
     return ren, ren_win, iren
 
     
@@ -352,10 +385,8 @@ def map_source_object(obj):
     actor.SetMapper(mapper)
     return mapper, actor
 
-def add_actors_to_scene(renderer, actor, *args):
-    renderer.AddActor(actor)
-    if args:
-        map(renderer.AddActor, args)
+def add_actors_to_scene(renderer, actors):
+    map(renderer.AddActor, actors)
 
 def prepare_render_env(render_window, window_interactor):
     window_interactor.Initialize()
@@ -365,6 +396,7 @@ def prepare_render_env(render_window, window_interactor):
 def setup_timer(window_interactor, input_conn):
     callback = vtkTimerCallback(input_conn)
     window_interactor.AddObserver("TimerEvent", callback.execute)
+    log_tick("observer added")
     return window_interactor.CreateRepeatingTimer(100)
 
 ####################
@@ -380,6 +412,13 @@ class ControlMessage(dict):
         else:
             return None
 
+class ActivityUpdateMessage(object):
+    def __init__(self, units_activities):
+        self.units_activities = units_activities
+    @property
+    def units_activities(self):
+        return units_activities
+
 # def make_pickler(pipe_out):
 #     return pickle.Pickler(pipe_out, pickle.HIGHEST_PROTOCOL)
 
@@ -388,19 +427,27 @@ class ControlMessage(dict):
 
 # Message handling on the visualizer side
 
-def interpret_visualisation_message(received_object):
+def interpret_simu_to_visu_message(received_object):
     """Used by the visualisation process to trigger the action
     associated with a message received from the simulation process."""
     if isinstance(received_object, ControlMessage):
         handle_visualisation_control(received_object)
+    if isinstance(received_object, ActivityUpdateMessage):
+        NETWORK.update_scalars(received_object.units_activities)
+    if isinstance(received_object, VisualisableNetworkStructure):
+        return VisualisableNetwork(received_object)
 
 def handle_visualisation_control(obj):
     if (obj["exit"]):
+        LOGGER.info("Visualisation received exit control msg.")
         exit()
 
 # Message handling on the main() simulation side
 
-def interpret_control_message(received_object):
+def interpret_visu_to_simu_message(received_object):
+    pass
+
+def handle_simulation_control(obj):
     pass
 
 if __name__ == "__main__":

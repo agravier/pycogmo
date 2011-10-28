@@ -3,7 +3,7 @@
 import itertools
 import math
 import pyNN.nest as pynnn
-from visualisation import VisualisableNetworkStructure
+from visualisation import VisualisableNetworkStructure, Unit
 
 class AdapterLockedError(Exception):
     pass
@@ -12,7 +12,7 @@ class PynnToVisuAdapter(object):
     def __init__(self, logger):
         self.commited = False
         self.logger = logger
-        self.output_struct = VisualisableNetworkStructure(logger)
+        self.output_struct = VisualisableNetworkStructure()
         self.pynn_units_it = []
         # individual units list
         self.vis_units = []
@@ -63,11 +63,11 @@ class PynnToVisuAdapter(object):
         for pynn_u in p:
             u = None
             if not three_d:
-                u = VisualisableNetworkStructure.Unit(
+                u = Unit(
                     int(pynn_u),
                     pynn_u.position[0], pynn_u.position[1])
             else:
-                u = VisualisableNetworkStructure.Unit(
+                u = Unit(
                     int(pynn_u),
                     pynn_u.position[0], pynn_u.position[1],
                     pynn_u.position[2])
@@ -111,5 +111,5 @@ class PynnToVisuAdapter(object):
         # range and use a sigmoidal adjustment.
         if w > 1 or w < -1:
             w = min(max(w, -1), 1)
-            logger.info("convert_weights made a dummy adjustment.")
+            self.logger.info("convert_weights made a dummy adjustment.")
         return w
