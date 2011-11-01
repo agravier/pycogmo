@@ -8,6 +8,7 @@ Non-python dependencies:
 
 Python pip-installable dependencies:
 - PyNN
+- SimPy
 - mock
 - nose
 
