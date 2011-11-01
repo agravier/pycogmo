@@ -2,8 +2,9 @@
 
 import itertools
 import math
-import pyNN.nest as pynnn
-from visualisation import VisualisableNetworkStructure, Unit
+import operator
+import pyNN.brian as pynnn
+from visualisation import VisualisableNetworkStructure, Unit, ActivityUpdateMessage
 
 class AdapterLockedError(Exception):
     pass
@@ -16,6 +17,11 @@ class PynnToVisuAdapter(object):
         self.pynn_units_it = []
         # individual units list
         self.vis_units = []
+        # ordered list of PyNN maps
+        self.maps = []
+        # dict of (pyNN population, previous (latest) list of
+        # population units' spikes counts):
+        self.spikes = dict()
         # individual connections list
         self.units_connections = []
         self.maps_connections = []
@@ -75,6 +81,8 @@ class PynnToVisuAdapter(object):
             # We add the unit when commiting the structure, because we
             # need to add them to the output_struct in global id order
         self.num_units += p.size
+        self.maps.append(p)
+        self.spikes[p] = [0]*p.size
         self.aliases[p.label] = alias
 
     def add_pynn_projection(self, sending_population,
@@ -82,9 +90,9 @@ class PynnToVisuAdapter(object):
                             connection_manager):
         """Records a projection from sending_population to
         receiving_population. The connection_manager parameter
-        expects a pyNN.nest.simulator.ConnectionManager, it can be
+        expects a pyNN.brian.simulator.ConnectionManager, it can be
         obtrained by
-        pyNN.nest.simulator.Projection.connection_manager.
+        pyNN.brian.simulator.Projection.connection_manager.
         """
         self.assert_open()
         w = connection_manager.get("weight", "array")
@@ -113,3 +121,31 @@ class PynnToVisuAdapter(object):
             w = min(max(w, -1), 1)
             self.logger.info("convert_weights made a dummy adjustment.")
         return w
+
+    def make_activity_update_message(self):
+        newly_fired = dict()
+        max_current_activity_list = list()
+        for m in self.maps:
+            spikes = m.get_spike_counts().values()
+            newly_fired[m] = map(operator.sub, spikes, self.spikes[m])
+            self.spikes[m] = spikes
+            max_current_activity_list.append(max(newly_fired[m]))
+            self.logger.debug(("A map with %s units and a max activity of "
+                               "%s passes by."), len(newly_fired[m]),
+                              max(newly_fired[m]))
+        max_current_activity = max(max_current_activity_list)
+        activity = list()
+        if max_current_activity == 0:
+            activity = [0] * self.num_units
+            self.logger.debug(("There is no overall activity, making an"
+                               "update list of %s zeros."), self.num_units)
+        else:
+            for m in self.maps:
+                activity = activity + \
+                    map(lambda x: min(1., 
+                                      x / float(max_current_activity)),
+                        newly_fired[m])
+        self.logger.debug(("The update list contains %s values. It "
+                           "looks like that: %s"), len(activity),
+                          activity)
+        return ActivityUpdateMessage(activity)

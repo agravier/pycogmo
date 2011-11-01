@@ -1,6 +1,6 @@
 #!/usr/bin/env python2
 
-import pyNN.nest as pynnn
+import pyNN.brian as pynnn
 # from pyNN.recording.files import HDF5ArrayFile needs cython and
 # tables (=pain) 
 from pyNN.utility import init_logging
@@ -15,7 +15,17 @@ from common.utils import log_tick, LOGGER
 import ui.graphical.visualisation as visualisation
 import ui.graphical.pynn_to_visu as pynn_to_visu
 
+# Send an activity update to the visualisation process every
+# SIMU_TO_VISU_MESSAGE_PERIOD of simulated time.
+SIMU_TO_VISU_MESSAGE_PERIOD = 100
+
+# Total simulated duration
+SIMU_DURATION = 1000
+
+SIMU_TIMESTEP = 0.1
+
 VISU_PROCESS_JOIN_TIMEOUT = 10
+
 
 def setup_populations_recording(p, *args):
     """calls record(to_file=False), record_gsyn(to_file=False),
@@ -50,7 +60,7 @@ def main():
         name="display_process", args=(child_conn, LOGGER))
     p.start()
 
-    pynnn.setup()
+    pynnn.setup(timestep=SIMU_TIMESTEP)
     init_logging("logfile", debug=True)
     LOGGER.info("Simulation started with command: %s", sys.argv)
 
@@ -80,6 +90,14 @@ def main():
                                             parameters=[1,0.1])
     prj1_2.randomizeWeights(weight_distr)
 
+    source = pynnn.NoisyCurrentSource(
+        mean=100, stdev=50, dt=SIMU_TIMESTEP, 
+        start=10.0, stop=SIMU_DURATION, rng=pynnn.NativeRNG(seed=100)) 
+    source.inject_into(list(p1.sample(50).all()))
+
+    p1.record(to_file=False)
+    p2.record(to_file=False)
+
     ## Build and send the visualizable network structure
     adapter = pynn_to_visu.PynnToVisuAdapter(LOGGER)
     adapter.add_pynn_population(p1)
@@ -88,10 +106,19 @@ def main():
     adapter.commit_structure()
     
     parent_conn.send(adapter.output_struct)
-    time.sleep(10)
     
+    # Number of chunks to run the simulation:
+    n_chunks = SIMU_DURATION // SIMU_TO_VISU_MESSAGE_PERIOD
+    last_chunk_duration = SIMU_DURATION % SIMU_TO_VISU_MESSAGE_PERIOD
     # Run the simulator
-    pynnn.run(100.0)
+    for visu_i in xrange(n_chunks):
+        pynnn.run(SIMU_TO_VISU_MESSAGE_PERIOD)
+        parent_conn.send(adapter.make_activity_update_message())
+        LOGGER.debug("real current p1 spike counts: %s",
+                     p1.get_spike_counts().values())
+    if last_chunk_duration > 0:
+        pynnn.run(last_chunk_duration)
+        parent_conn.send(adapter.make_activity_update_message())
     # Cleanup
     pynnn.end()
     # Wait for the visualisation process to terminate

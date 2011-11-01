@@ -22,6 +22,8 @@ NETWORK = None # The VisualisableNetwork that is a VTK source for
 
 REN, REN_WIN, I_REN = None, None, None
 
+VISU_BG = (0, 0, 0) # Background RGB components, each in [0,1]
+
 ################################
 # VisualisableNetworkStructure #
 ################################
@@ -284,19 +286,26 @@ class VisualisableNetwork(object):
                        lengths=None):
         """grids and lengths are two complementary lists, g is a list
         of vtkUnstructuredGrid, lengths is the list of the number n of
-        units in each g, and scalars_list is the list of updated values
-        for all units in all grids g. scalars_list is ordered following the
-        grid_lengths list of grids. The method updates the scalar
-        vaues of all units in all grids using scalars_list."""
+        units in each g, and scalars_list is the list of updated
+        values for all units in all grids g. scalars_list is ordered
+        following the grid_lengths list of grids. The method updates
+        the scalar vaues of all units in all grids using scalars_list."""
         if grids == None:
             grids=self.grids
         if lengths == None:
             lengths=self.grids_lengths
+        LOGGER.debug(("grids: %s lengths: %s"), grids, lengths)
         m = 0
         for i in range(len(grids)): 
             l = lengths[i]
-            scalars_slice = scalars_list[m:l]
-            m = l
+            LOGGER.debug(("The grid %s has a length of %s."), 
+                         i, l)
+            LOGGER.debug(("m = %s and l = %s."), 
+                         m, l)
+            scalars_slice = scalars_list[m:l+m]
+            LOGGER.debug(("The slice has a length of %s."),
+                         len(scalars_slice))
+            m = l+m
             vtk_scalars = vtk.vtkFloatArray()
             for j in range(l):
                 vtk_scalars.InsertNextValue(scalars_slice[j])
@@ -340,6 +349,7 @@ class vtkTimerCallback(object):
             REN.ResetCamera()
             prepare_render_env(REN_WIN, I_REN)
         else:
+            LOGGER.info("Activity update received.")
             I_REN.GetRenderWindow().Render()
         self.timer_count += 1
 
@@ -353,7 +363,7 @@ def visualisation_process_f(child_conn, logger):
     log_tick("start visu")
     REN, REN_WIN, I_REN = setup_visualisation()
     log_tick("after setup_vis")
-    REN.SetBackground(0.5, 0.5, 0.5)
+    REN.SetBackground(VISU_BG[0], VISU_BG[1], VISU_BG[2])
     log_tick("background set")
     timer_id = setup_timer(I_REN, child_conn)
     I_REN.Start()
@@ -414,10 +424,10 @@ class ControlMessage(dict):
 
 class ActivityUpdateMessage(object):
     def __init__(self, units_activities):
-        self.units_activities = units_activities
+        self._units_activities = units_activities
     @property
     def units_activities(self):
-        return units_activities
+        return self._units_activities
 
 # def make_pickler(pipe_out):
 #     return pickle.Pickler(pipe_out, pickle.HIGHEST_PROTOCOL)

@@ -4,12 +4,21 @@ This is a Python 2 project meant to be run on Unix platforms. If you run windows
 
 Non-python dependencies:
 - NEST (NEST Neural Simulator) + pyNEST
+  OR
+- Brian (http://www.briansimulator.org)
+
 - VTK (The Visualization Toolkit) + Python 2 bindings
 
 Python pip-installable dependencies:
 - PyNN
 - mock
 - nose
+
+if using Brian:
+- scipy which requires a fortran compiler if you pip install it (On Arch, use gcc-fortran)
+- sympy
+
+For now, switching between simulators is done manually. For instance, switching from PyNN to Brian: grep -ilr 'pyNN.nest' *.py */*.py */*/*.py | xargs sed -i 's/pyNN.nest/pyNN.brian/g'
 
 The project should be installed locally as a non-priviledged user except if you know what you are doing.
 
