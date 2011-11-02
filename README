@@ -3,7 +3,7 @@ TODO: write about the idea, the roadmap, the existing files, make README .rst
 This is a Python 2 project meant to be run on Unix platforms. If you run windows, install Linux on a VM. Virtualbox works and is free.
 
 Non-python dependencies:
-- NEST (NEST Neural Simulator) + pyNEST
+- NEST (NEST Neural Simulator) + PyNEST
 - VTK (The Visualization Toolkit) + Python 2 bindings
 
 Python pip-installable dependencies:
@@ -11,6 +11,7 @@ Python pip-installable dependencies:
 - SimPy
 - mock
 - nose
+- numpy
 
 The project should be installed locally as a non-priviledged user except if you know what you are doing.
 
