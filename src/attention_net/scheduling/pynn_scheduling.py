@@ -2,47 +2,46 @@
 """ Utilities and algorithms to integrate PyNN and SimPy
 """
 
-import SimPy.Simulation as simpy
+import pyNN.nest as pynnn
+import SimPy.Simulation as sim
 from common.utils import LOGGER
 
-SIMPY_END_T = 0
+SIMPY_END_T = -1
 
 def configure_scheduling():
-    SimPy.Simulation.initialize()
+    sim.initialize()
 
-def run_simulation():
-    # WHOAAAAAAAAAAAAAAAAAAA complex. need to make the parallel
-    # between simpy's run and pyNN's run, because we want to run
-    # exactly the right length between 2 events...
-    SimPy.Simulation.simulate(nutil=SIMPY_END_T)
+def run_simulation(max_time = None):
+    """Runs the simulation while keeping SimPy and PyNN synchronized at
+    event times. Runs until no even is scheduled unless max_time is
+    provided."""
+    is_not_end = None
+    if max_time == None:
+        # Would testing len(sim.Globals.allEventTimes()) be faster?
+        is_not_end = lambda t: return not isinstance(t, sin.Infinity)
+    else:
+        is_not_end = lambda t: return t < max_time
+    t_next_event = sim.peek()
+    while is_not_end(t_next_event):
+        LOGGER.debug("Progressing to SimPy event at time %s",
+                     t_next_event)
+        pynnn.run(t_next_event - sim.now())
+        sim.step()
+        t_next_event = sim.peek()
+        
 
-class InputPresentation(simpy.Process):
+class InputPresentation(sim.Process):
     def __init__(self, population, input_sample):
         Process.__init__(self)
         self.name = "Presentation of " + str(input_sample) + \
             " to " + population.label
         self.population = population
         self.input_sample = input_sample
-
-     def ACTIONS(self):
-         # Does ACTIONS() connects input and run, or does run only
-         # connect? There are several approaches.
-         # 1) go() installs the input and sets up an event to remove
-         #    the input. The running itself is done elsewhere.
-         # 2) Assuming there is a SimPy hook for end-of event, we
-         #    associate this hook with removal of the input. The
-         #    running is done elsewhere and pynn() runs are atomically
-         #    done between all events.
-         # 3) go() installs the input, and does part of the pynn run
-         #    for an atomically small duration in function of the next
-         #    event, yields before the next event, and repeats that
-         #    until the total duration of the presentation is
-         #    reached. The end of input event is also installed here.
-         # The decision to implement 1, 2, or 3 or any combination
-         # depends on the facilities offered by simpy.
-         LOGGER.info("%s starting", self.name)
-         yield hold,self,100.0
-         print now( ), self.name, "Arrived"
+    
+    def ACTIONS(self):
+        LOGGER.info("%s starting", self.name)
+        yield sim.hold, self, 10.0
+        print sim.now(), self.name, "Arrived"
 
 def schedule_input_presentation(population, 
                                 input_sample, 
