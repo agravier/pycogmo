@@ -71,3 +71,12 @@ def get_weights(proj):
 def set_weights(proj, w):
     if isinstance(w, Weights):
         proj.setWeights(w.weights)
+
+class InputLayer(object):
+    """Wraps a 2D array of normalized floating-point numbers that
+    has the same dimensions as the population of PyNN neurons to which
+    it is to be presented. The stimulation scale can be adjusted by
+    providing the max input amplitude in nA."""
+    def __init__(self, input_array, max_namp):
+        TODO
+        source = pynnn.DCSource(amplitude=1.0, start=0.0, stop=None)

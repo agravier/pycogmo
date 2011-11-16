@@ -43,3 +43,6 @@ def log_tick(s):
     LOGGER.log(SUBDEBUG, "tick at time %s: %s", now, s)
     for h in LOGGER.handlers:
        h.flush()
+
+def optimal_rounding(timestep):
+    return len(str(timestep).split('.')[1])

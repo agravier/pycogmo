@@ -4,30 +4,49 @@
 
 import pyNN.nest as pynnn
 import SimPy.Simulation as sim
-from common.utils import LOGGER
+from common.pynn_utils import InputSample
+from common.utils import LOGGER, optimal_rounding
 
 SIMPY_END_T = -1
 
+PYNN_TIME_STEP = pynnn.get_time_step()
+PYNN_TIME_ROUNDING = optimal_rounding(PYNN_TIME_STEP)
+
+class DummyProcess(sim.Process):
+    def ACTIONS(self):
+        yield sim.hold,self,0
+
 def configure_scheduling():
     sim.initialize()
+    pynnn.setup()
 
-def run_simulation(max_time = None):
+def run_simulation(end_time = None):
     """Runs the simulation while keeping SimPy and PyNN synchronized at
-    event times. Runs until no even is scheduled unless max_time is
-    provided."""
+    event times. Runs until no event is scheduled unless end_time is
+    provided. if end_time is given, runs until end_time."""
+    def run_pynn(end_t):
+        pynn_now = pynnn.get_current_time()
+        pynn_now_round = round(pynn_now, PYNN_TIME_ROUNDING)
+        delta_t = round(end_t - pynn_now_round, PYNN_TIME_ROUNDING)
+        if pynn_now <= pynn_now_round and delta_t > PYNN_TIME_STEP:
+            delta_t = round(delta_t - PYNN_TIME_STEP, PYNN_TIME_ROUNDING)
+        if delta_t > 0: # necessary because run(0) may run PyNN by timestep
+            pynnn.run(delta_t) # neuralensemble.org/trac/PyNN/ticket/200
     is_not_end = None
-    if max_time == None:
+    if end_time == None:
         # Would testing len(sim.Globals.allEventTimes()) be faster?
-        is_not_end = lambda t: return not isinstance(t, sin.Infinity)
+        is_not_end = lambda t: not isinstance(t, sim.Infinity)
     else:
-        is_not_end = lambda t: return t < max_time
-    t_next_event = sim.peek()
-    while is_not_end(t_next_event):
+        DummyProcess().start(at=end_time)
+        is_not_end = lambda t: t <= end_time
+    t_event_start = sim.peek()
+    while is_not_end(t_event_start):
         LOGGER.debug("Progressing to SimPy event at time %s",
-                     t_next_event)
-        pynnn.run(t_next_event - sim.now())
-        sim.step()
-        t_next_event = sim.peek()
+                     t_event_start)
+        run_pynn(t_event_start) # run until event start
+        sim.step() # process the event
+        run_pynn(sim.now()) # run PyNN until event end
+        t_event_start = sim.peek()
         
 
 class InputPresentation(sim.Process):
@@ -36,12 +55,13 @@ class InputPresentation(sim.Process):
         self.name = "Presentation of " + str(input_sample) + \
             " to " + population.label
         self.population = population
-        self.input_sample = input_sample
+        self.input_sample = input_sample # class InputSample
     
     def ACTIONS(self):
-        LOGGER.info("%s starting", self.name)
-        yield sim.hold, self, 10.0
-        print sim.now(), self.name, "Arrived"
+        LOGGER.debug("%s starting", self.name)
+        TODO
+        yield sim.hold, self, 0
+
 
 def schedule_input_presentation(population, 
                                 input_sample, 
