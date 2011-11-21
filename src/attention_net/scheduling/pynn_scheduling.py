@@ -50,12 +50,15 @@ def run_simulation(end_time = None):
         
 
 class InputPresentation(sim.Process):
-    def __init__(self, population, input_sample):
+    def __init__(self, input_layer, input_sample, duration):
+        """Process presenting input_sample (class
+        common.pynn_utils.InputSample) to input_layer (class
+        common.pynn_utils.RectilinearInputLayer)"""
         Process.__init__(self)
         self.name = "Presentation of " + str(input_sample) + \
             " to " + population.label
         self.population = population
-        self.input_sample = input_sample # class InputSample
+        self.input_sample = input_sample
     
     def ACTIONS(self):
         LOGGER.debug("%s starting", self.name)
