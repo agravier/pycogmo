@@ -4,7 +4,9 @@ functionality.
 """
 
 from math import isnan
+import magic
 import numpy
+import os
 
 import pyNN.nest as pynnn
 
@@ -116,13 +118,15 @@ class RectilinearInputLayer(object):
         return self.electrodes[i]
 
     # DCSources have to be recreated each time.
-    def apply_input(self, sample, start_time, duration, max_namp = None):
+    def apply_input(self, sample, start_time, duration,
+                    max_namp = None, dcsource_class = pynnn.DCSource):
         """Given a sample of type InputSample and of same shape as the
         input layer, and a duration, creates and connects electrodes
         that apply the input specified by the input sample matrix to
         the input population. A max_namp value can be specfied in
         nanoamperes to override the max current corresponding to an
-        input value of 1 given at construction time."""
+        input value of 1 given at construction time. dcsource_class is
+        here as a primitive dependency injection facility."""
         if max_namp == None:
             max_namp = self.input_scaling
         for x in xrange(self._dim1):
@@ -130,13 +134,113 @@ class RectilinearInputLayer(object):
                 # Will the GC collect the electrodes? Does PyNN delete
                 # them after use?
                 self.electrodes[x][y][0] = \
-                    pynnn.DCSource(amplitude=max_namp * sample[x][y], 
+                    dcsource_class(amplitude=max_namp * sample[x][y], 
                                    start=start_time, 
                                    stop=start_time+duration)
 
+class InvalidFileFormatError(Exception):
+    def __init__(self, mime_type, mime_subtype):
+        self._type = mime_type
+        self._subtype  = mime_subtype
+    def __str__(self):
+        return "%s files of type %s are not supported." % \
+            self._type, self._subtype
+
+def read_input_data(file_descr, dim1, dim2):
+    buf = file_descr.read(1024)
+    m = magic.Magic(mime=True)
+    mime = m.from_buffer(buf)
+    mime = mime.split('/').lower()
+    file_descr.seek(-1024, os.SEEK_CUR)
+    float_array = None
+    if mime[0] = 'image':
+        if mime[1] == 'png':
+            float_array = read_png_data(file_descr)
+        else:
+            raise InvalidFileFormatError(mime[0], mime[1])
+    elif mime[0] == 'text':
+        if mime[1] == 'plain':
+            float_array = read_csv_data(file_descr)
+        else:
+            raise InvalidFileFormatError(mime[0], mime[1])
+    verify_input_array(float_array)
+    return float_array
+
+def read_png_data(file_descr):
+    pass # TODO
+
+def read_csv_data(file_descr):
+    pass # TODO
+
+def verify_input_array(float_array):
+    pass # TODO
+
 class InputSample(object):
     """Wraps a 2D array of normalized floating-point numbers that has
-    the same dimensions as the InputLayer to which it is presented."""
+    the same dimensions as the InputLayer to which it is
+    presented. The data can be an array, or copied from an object with
+    [][] accessor, loaded from a file, uniformly initialized to the
+    same value, or initialized by a user-provided function."""
     # implement an [][] accessor
-    pass
+    def __init__(self,  dim1, dim2, initializer, expand = True):
+        """The initializer can be an array, an object with [][]
+        accessor, a filename (string), a file object, a single
+        flaoting point number withing [0,1] (the array is uniformly
+        initialized to the same value), or a user-provided callable
+        that takes two integers x and y in [0, dim1[ and [0, dim2[
+        respectively, and returns the value to be stored in the array
+        at [x][y]. The optional parameter expand affects the case
+        where the initializer is a callable, an object with
+        __getitem__, or a single number. In those case, setting expand
+        to False prevents the precomputation of the whole array, and
+        the InputSample accessor encapsulate the function call, the
+        object accessor, or always returns the given number. If expand
+        is True, the InputSample created is mutable. If expand is
+        False, the InputSample is immutable."""
+        self._array = [] 
+        if isinstance(initializer, basestring):
+            with open(initializer, 'rb') as f:
+                self._array = read_input_data(f, dim1, dim2)
+        elif isinstance(initializer, types.FileType):
+            self._array = read_input_data(initializer, dim1, dim2)
+        elif isinstance(initializer, list): 
+            self._array = initializer
+        elif hasattr(initializer, '__getitem__'):
+            if expand:
+                for x in xrange(dim1):
+                    self._array[x] = []
+                    for y in xrange(dim2):
+                        self._array[x][y].append(initializer[x][y])
+            else:
+                self.__getitem__ = lambda x: initializer[x]
+                self.__setitem__ = self._raise_immutable
+        elif hasattr(initializer, '__call__'): 
+            # to restrict to functions:
+            # isinstance(initializer, 
+            #            (types.FunctionType, types.BuiltinFunctionType))
+            if expand:
+                for x in xrange(dim1):
+                    self._array[x] = []
+                    for y in xrange(dim2):
+                        self._array[x][y].append(initializer(x,y))
+            else:
+                class InitCont(object):
+                    def __init__(self, x):
+                        self._x = x
+                    def __getitem__(y): 
+                        return initializer(x, y)
+                self.__getitem__ = lambda x: InitCont(x)
+                self.__setitem__ = self._raise_immutable
+        self._dim1 = dim1
+        self._dim2 = dim2
 
+    def _raise_immutable(*args):
+        raise TypeError("Attempted change of state on an "  
+                        "immutable InputSample (created with "
+                        "expand=False)")
+
+    def __getitem__(k):
+        return self._array[k]
+
+    def __setitem__(k, v):
+        sef._array[k] = v

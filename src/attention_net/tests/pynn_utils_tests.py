@@ -41,8 +41,18 @@ def setup_pynn_populations():
 
 def setup_rectinilearinputlayers():
     setup_pynn_populations()
-    Tns.ril1 = RectilinearInputLayer(Tns.p1, 8, 8, 1)
-    Tns.ril2 = RectilinearInputLayer(Tns.p2, 8, 8, 2)
+    Tns.ril1_max_namp = 1
+    Tns.ril2_max_namp = 2
+    Tns.ril1 = RectilinearInputLayer(Tns.p1, 8, 8, Tns.ril1_max_namp)
+    Tns.ril2 = RectilinearInputLayer(Tns.p2, 8, 8, Tns.ril2_max_namp)
+
+# def setup_mock_dcsource():
+#     Tns.dcsource_patch = patch.object(pynnn., "__int__")
+#     Tns.dcsource_patch.start()
+
+# def teardown_mock_dcsource():
+#     Tns.dcsource_patch.stop()
+#     Tns.dcsource_patch = None
 
 @with_setup(setup_weights)
 def test_weights_eq():
@@ -111,7 +121,22 @@ def test_rectilinearinputlayer_init():
 
 @with_setup(setup_rectinilearinputlayers)
 def test_rectilinearinputlayer_access():
-    a, b = Tns.ril1[1][2]
+    a, b = Tns.ril1[1][2] # __getitem__
     assert a == None
     assert b in set(Tns.p1)
     assert Tns.ril1.shape == (8, 8)
+
+@with_setup(setup_rectinilearinputlayers)
+def test_rectilinearinputlayer_apply_input():
+    mock_dcsource = Mock(spec = pynnn.DCSource)
+    some_sample = [[5]*8]*8
+    Tns.ril1.apply_input(sample = some_sample, 
+                         start_time = 12, duration = 51,
+                         max_namp = None, dcsource_class = mock_dcsource)
+    assert mock_dcsource.call_count == 64
+    for args_i in itertools.product(xrange(8), repeat=2):
+        args = mock_dcsource.call_args_list[args_i[0]*8+args_i[1]]
+        assert args[0] == ()
+        assert args[1] == {'amplitude' : Tns.ril1_max_namp * \
+                               some_sample[args_i[0]][args_i[1]] , 
+                           'start' : 12, 'stop' : 12 + 51}

@@ -12,6 +12,13 @@ Python pip-installable dependencies:
 - mock
 - nose
 - numpy
+((( - ctype, a dep of python-magic, needs to be installed like that (https://github.com/pypa/pip/issues/317):
+pip install --no-install ctypes
+cd <yourvirtualenv>/build/ctypes/source/libffi)
+chmod +x configure
+pip install ctypes
+)))
+- python-magic
 
 The project should be installed locally as a non-priviledged user except if you know what you are doing.
 
