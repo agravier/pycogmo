@@ -19,6 +19,7 @@ chmod +x configure
 pip install ctypes
 )))
 - python-magic
+- PIL
 
 The project should be installed locally as a non-priviledged user except if you know what you are doing.
 

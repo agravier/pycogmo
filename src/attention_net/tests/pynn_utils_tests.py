@@ -9,14 +9,23 @@ from nose import with_setup
 from nose.tools import eq_, raises, timed, nottest
 import pyNN.nest as pynnn
 from common.pynn_utils import *
+from common.utils import splice
 
 NAN = float("NaN")
+
+BASE_DATA_TESTPATH = "test_data/"
+VALID_SAMPLE_INPUT_FILEPATHS = {
+    "png" : [BASE_DATA_TESTPATH + "bnw_checker_8x8_24bit.png",
+             BASE_DATA_TESTPATH + "bnw_checker_8x8_2bit.png",
+             BASE_DATA_TESTPATH + "color_checker_8x8_24bit.png",],
+    "csv" : [BASE_DATA_TESTPATH + "csv_checker.txt"]}
+ALL_SAMPLE_INPUT_FILES = splice(VALID_SAMPLE_INPUT_FILEPATHS.values())
 
 def list_units(ril):
     """Returns the list of PyNN units linked by the given rectilinear
     input layer."""
     return [b for a, b in
-         list(itertools.chain.from_iterable(ril.electrodes))]
+         list(splice(ril.electrodes))]
 
 class Tns(object):
     pass
@@ -140,3 +149,7 @@ def test_rectilinearinputlayer_apply_input():
         assert args[1] == {'amplitude' : Tns.ril1_max_namp * \
                                some_sample[args_i[0]][args_i[1]] , 
                            'start' : 12, 'stop' : 12 + 51}
+
+
+
+# def setup_

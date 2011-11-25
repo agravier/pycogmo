@@ -1,6 +1,7 @@
 #!/usr/bin/env python2
 
 import datetime
+import itertools
 import logging
 import multiprocessing
 import os
@@ -46,3 +47,6 @@ def log_tick(s):
 
 def optimal_rounding(timestep):
     return len(str(timestep).split('.')[1])
+
+def splice(deep_list):
+    return list(itertools.chain.from_iterable(deep_list))

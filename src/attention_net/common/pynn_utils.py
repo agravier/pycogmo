@@ -3,10 +3,12 @@
 functionality.
 """
 
+import csv
 from math import isnan
 import magic
 import numpy
 import os
+from PIL import Image
 
 import pyNN.nest as pynnn
 
@@ -146,18 +148,26 @@ class InvalidFileFormatError(Exception):
         return "%s files of type %s are not supported." % \
             self._type, self._subtype
 
-def read_input_data(file_descr, dim1, dim2):
-    buf = file_descr.read(1024)
+class InvalidMatrixShapeError(Exception):
+    def __init__(self, required_dim, provided_dim):
+        self._req = required_dim
+        self._prov = provided_dim
+    def __str__(self):
+        return ("The required input data shape should be "
+                "%s, but the shape of the data provided is "
+                "%s.") % self._req, self._prov
+
+def read_input_data(file_path, dim1, dim2):
     m = magic.Magic(mime=True)
-    mime = m.from_buffer(buf)
+    mime = m.from_file(file_path)
     mime = mime.split('/').lower()
-    file_descr.seek(-1024, os.SEEK_CUR)
+    # buf = None
+    # with open(file_path, 'rb') as f:
+    #     buf = file_descr.read(1024)
+    # file_descr.seek(-1024, os.SEEK_CUR)
     float_array = None
     if mime[0] = 'image':
-        if mime[1] == 'png':
-            float_array = read_png_data(file_descr)
-        else:
-            raise InvalidFileFormatError(mime[0], mime[1])
+        float_array = read_image_data(file_path)
     elif mime[0] == 'text':
         if mime[1] == 'plain':
             float_array = read_csv_data(file_descr)
@@ -166,14 +176,33 @@ def read_input_data(file_descr, dim1, dim2):
     verify_input_array(float_array)
     return float_array
 
-def read_png_data(file_descr):
-    pass # TODO
+def read_image_data(file_path):
+    im = Image.open(file_path)
+    if im.size != (dim1, dim2):
+        raise InvalidMatrixShapeError((dim1, dim2), im.size)
+    byte_array = numpy.array(im.convert("L")) # grayscale, [0 255]
+    norm_array = byte_array / 255.
+    return norm_array
 
-def read_csv_data(file_descr):
-    pass # TODO
+def read_csv_data(file_path):
+    float_array = []
+    with open(file_path, 'rb') as f:
+        row_reader = csv.reader(f)
+        for r in row_reader:
+            float_array.append(map(float, r))
+    return numpy.array(float_array)
+    
 
-def verify_input_array(float_array):
-    pass # TODO
+def verify_input_array(float_array, dim1, dim2):
+    d1 = len(float_array)
+    if d1 != dim1:
+        raise InvalidMatrixShapeError((dim1, dim2), (d1, "unkown"))
+    for r in float_array:
+        d2 = len(r)
+        if d2 != dim2:
+            raise InvalidMatrixShapeError((dim1, dim2), (d1, d2))
+        if not numpy.isreal(r): # row test
+            raise TypeError("The input array contains invalid data.")
 
 class InputSample(object):
     """Wraps a 2D array of normalized floating-point numbers that has
@@ -184,25 +213,30 @@ class InputSample(object):
     # implement an [][] accessor
     def __init__(self,  dim1, dim2, initializer, expand = True):
         """The initializer can be an array, an object with [][]
-        accessor, a filename (string), a file object, a single
-        flaoting point number withing [0,1] (the array is uniformly
-        initialized to the same value), or a user-provided callable
-        that takes two integers x and y in [0, dim1[ and [0, dim2[
-        respectively, and returns the value to be stored in the array
-        at [x][y]. The optional parameter expand affects the case
-        where the initializer is a callable, an object with
-        __getitem__, or a single number. In those case, setting expand
-        to False prevents the precomputation of the whole array, and
-        the InputSample accessor encapsulate the function call, the
-        object accessor, or always returns the given number. If expand
-        is True, the InputSample created is mutable. If expand is
-        False, the InputSample is immutable."""
+        accessor, a file path (string), a single flaoting point number
+        withing [0,1] (the array is uniformly initialized to the same
+        value), or a user-provided callable that takes two integers x
+        and y in [0, dim1[ and [0, dim2[ respectively, and returns the
+        value to be stored in the array at [x][y]. The optional
+        parameter expand affects the case where the initializer is a
+        callable, an object with __getitem__, or a single number. In
+        those case, setting expand to False prevents the
+        precomputation of the whole array, and the InputSample
+        accessor encapsulate the function call, the object accessor,
+        or always returns the given number. If expand is True, the
+        InputSample created is mutable. If expand is False, the
+        InputSample is immutable."""
         self._array = [] 
         if isinstance(initializer, basestring):
-            with open(initializer, 'rb') as f:
-                self._array = read_input_data(f, dim1, dim2)
+            try:
+                self._array = read_input_data(intializer, dim1, dim2)
+            except IOError as e:
+                LOGGER.error("Could not read file %s.", initializer)
+                raise e
         elif isinstance(initializer, types.FileType):
-            self._array = read_input_data(initializer, dim1, dim2)
+            raise TypeError("Pass a string with the filepath to the " 
+                            "InputSample initializer, instead of a "
+                            "file descriptor.")
         elif isinstance(initializer, list): 
             self._array = initializer
         elif hasattr(initializer, '__getitem__'):
@@ -211,6 +245,7 @@ class InputSample(object):
                     self._array[x] = []
                     for y in xrange(dim2):
                         self._array[x][y].append(initializer[x][y])
+                verify_input_array(self._array)
             else:
                 self.__getitem__ = lambda x: initializer[x]
                 self.__setitem__ = self._raise_immutable
@@ -223,6 +258,7 @@ class InputSample(object):
                     self._array[x] = []
                     for y in xrange(dim2):
                         self._array[x][y].append(initializer(x,y))
+                verify_input_array(self._array)
             else:
                 class InitCont(object):
                     def __init__(self, x):
