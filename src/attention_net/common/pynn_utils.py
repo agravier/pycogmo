@@ -4,6 +4,7 @@ functionality.
 """
 
 import csv
+import itertools
 from math import isnan
 import magic
 import numpy
@@ -149,37 +150,38 @@ class InvalidFileFormatError(Exception):
             self._type, self._subtype
 
 class InvalidMatrixShapeError(Exception):
-    def __init__(self, required_dim, provided_dim):
-        self._req = required_dim
-        self._prov = provided_dim
+    def __init__(self, req_dim1, req_dim2, prov_dim1, prov_dim2):
+        self._req = req_dim1, req_dim2
+        self._prov = prov_dim1, prov_dim2
     def __str__(self):
         return ("The required input data shape should be "
-                "%s, but the shape of the data provided is "
-                "%s.") % self._req, self._prov
+                "%s,%s, but the shape of the data provided is "
+                "%s,%s.") % self._req[0], self._req[1], \
+                self._prov[0], self._prov[1]
 
 def read_input_data(file_path, dim1, dim2):
     m = magic.Magic(mime=True)
     mime = m.from_file(file_path)
-    mime = mime.split('/').lower()
+    mime = mime.lower().split('/')
     # buf = None
     # with open(file_path, 'rb') as f:
     #     buf = file_descr.read(1024)
     # file_descr.seek(-1024, os.SEEK_CUR)
     float_array = None
-    if mime[0] = 'image':
+    if mime[0] == 'image':
         float_array = read_image_data(file_path)
     elif mime[0] == 'text':
         if mime[1] == 'plain':
-            float_array = read_csv_data(file_descr)
+            float_array = read_csv_data(file_path)
         else:
             raise InvalidFileFormatError(mime[0], mime[1])
-    verify_input_array(float_array)
+    verify_input_array(float_array, dim1, dim2)
     return float_array
 
 def read_image_data(file_path):
     im = Image.open(file_path)
-    if im.size != (dim1, dim2):
-        raise InvalidMatrixShapeError((dim1, dim2), im.size)
+    # if im.size != (dim1, dim2):
+    #     raise InvalidMatrixShapeError((dim1, dim2), im.size)
     byte_array = numpy.array(im.convert("L")) # grayscale, [0 255]
     norm_array = byte_array / 255.
     return norm_array
@@ -188,7 +190,7 @@ def read_csv_data(file_path):
     float_array = []
     with open(file_path, 'rb') as f:
         row_reader = csv.reader(f)
-        for r in row_reader:
+        for r in itertools.ifilter(None, row_reader):
             float_array.append(map(float, r))
     return numpy.array(float_array)
     
@@ -196,12 +198,15 @@ def read_csv_data(file_path):
 def verify_input_array(float_array, dim1, dim2):
     d1 = len(float_array)
     if d1 != dim1:
-        raise InvalidMatrixShapeError((dim1, dim2), (d1, "unkown"))
+        raise InvalidMatrixShapeError(dim1, dim2, d1, "unkown")
     for r in float_array:
         d2 = len(r)
         if d2 != dim2:
-            raise InvalidMatrixShapeError((dim1, dim2), (d1, d2))
-        if not numpy.isreal(r): # row test
+            raise InvalidMatrixShapeError(dim1, dim2, d1, d2)
+        real = numpy.isreal(r)
+        if not isinstance(real, bool):
+            real = real.all()
+        if not real: # row test
             raise TypeError("The input array contains invalid data.")
 
 class InputSample(object):

@@ -7,28 +7,36 @@ from logging import NullHandler
 from mock import Mock, patch
 from nose import with_setup
 from nose.tools import eq_, raises, timed, nottest
+import os
 import pyNN.nest as pynnn
 from common.pynn_utils import *
 from common.utils import splice
 
+class Tns(object): # TestNameSpace
+    pass
+
 NAN = float("NaN")
 
-BASE_DATA_TESTPATH = "test_data/"
+CWD = os.getcwd()
+BASE_DATA_TESTPATH = CWD[:CWD.rfind("/src")] + \
+    "/src/attention_net/tests/test_data/"
 VALID_SAMPLE_INPUT_FILEPATHS = {
-    "png" : [BASE_DATA_TESTPATH + "bnw_checker_8x8_24bit.png",
-             BASE_DATA_TESTPATH + "bnw_checker_8x8_2bit.png",
-             BASE_DATA_TESTPATH + "color_checker_8x8_24bit.png",],
-    "csv" : [BASE_DATA_TESTPATH + "csv_checker.txt"]}
+    "png"     : [BASE_DATA_TESTPATH + "bnw_checker_8x8_24bit.png",
+                 BASE_DATA_TESTPATH + "bnw_checker_8x8_2bit.png",],
+    "colorpng": [BASE_DATA_TESTPATH + "color_checker_8x8_24bit_red.png",
+                 BASE_DATA_TESTPATH + "color_checker_8x8_24bit_green.png",
+                 BASE_DATA_TESTPATH + "color_checker_8x8_24bit_blue.png",],
+    "csv"     : [BASE_DATA_TESTPATH + "csv_checker.txt"]}
 ALL_SAMPLE_INPUT_FILES = splice(VALID_SAMPLE_INPUT_FILEPATHS.values())
+
+Tns.csv_checker_8x8_expected = \
+Tns.png_checker_8x8_expected = [[1,0]*4,[0,1]*4]*4
 
 def list_units(ril):
     """Returns the list of PyNN units linked by the given rectilinear
     input layer."""
     return [b for a, b in
          list(splice(ril.electrodes))]
-
-class Tns(object):
-    pass
 
 def setup_weights():
     Tns.w1_array = [[j/63. for j in range(i*8,8+i*8)] 
@@ -151,5 +159,55 @@ def test_rectilinearinputlayer_apply_input():
                            'start' : 12, 'stop' : 12 + 51}
 
 
+def test_read_input_data_valid():
+    for f in VALID_SAMPLE_INPUT_FILEPATHS["png"]:
+        assert (read_input_data(f, 8, 8) == 
+                Tns.png_checker_8x8_expected).all()
+    for f in VALID_SAMPLE_INPUT_FILEPATHS["csv"]:
+        assert (read_input_data(f, 8, 8) == 
+                Tns.csv_checker_8x8_expected).all()
+    for f in VALID_SAMPLE_INPUT_FILEPATHS["colorpng"]:
+        m = read_input_data(f, 8, 8)
+        t = m == Tns.csv_checker_8x8_expected
+        t[0][0] = True
+        assert t.all()
+        assert m[0][0] < 1 and m[0][0] > 0
+    
+@raises(IOError)
+def test_read_input_data_invalid_path():
+    read_input_data("something invalid", 8, 8)
 
-# def setup_
+@raises(InvalidMatrixShapeError)
+def test_read_input_data_incorrect_matrix_shape_1():
+    read_input_data(VALID_SAMPLE_INPUT_FILEPATHS["png"][0], 4, 16)
+
+@raises(InvalidMatrixShapeError)
+def test_read_input_data_incorrect_matrix_shape_2():
+    read_input_data(VALID_SAMPLE_INPUT_FILEPATHS["csv"][0], 4, 16)
+
+@raises(IOError)
+def test_read_image_data_not_an_image():
+    read_image_data(VALID_SAMPLE_INPUT_FILEPATHS["csv"][0])
+
+def test_verify_input_array_valid():
+    verify_input_array(Tns.csv_checker_8x8_expected, 8, 8)
+
+@raises(InvalidMatrixShapeError)
+def test_verify_input_array_invalid_1():
+    verify_input_array(Tns.csv_checker_8x8_expected, 8, 9)
+
+@raises(InvalidMatrixShapeError)
+def test_verify_input_array_invalid_2():
+    verify_input_array(Tns.csv_checker_8x8_expected, 3, 8)
+
+@raises(InvalidMatrixShapeError)
+def test_verify_input_array_invalid_3():
+    m = deepcopy(Tns.csv_checker_8x8_expected)
+    m[3] = [1]*9
+    verify_input_array(m, 8, 8)
+
+@raises(TypeError)
+def test_verify_input_array_invalid_4():
+    m = deepcopy(Tns.csv_checker_8x8_expected)
+    m[3][3] = "a"
+    verify_input_array(m, 8, 8)
