@@ -179,6 +179,7 @@ def read_input_data(file_path, dim1, dim2):
     return float_array
 
 def read_image_data(file_path):
+    """Raises IOError if the file is not an image."""
     im = Image.open(file_path)
     # if im.size != (dim1, dim2):
     #     raise InvalidMatrixShapeError((dim1, dim2), im.size)
@@ -187,12 +188,17 @@ def read_image_data(file_path):
     return norm_array
 
 def read_csv_data(file_path):
+    """Raises IOError if the file is not a CSV file."""
     float_array = []
-    with open(file_path, 'rb') as f:
-        row_reader = csv.reader(f)
-        for r in itertools.ifilter(None, row_reader):
-            float_array.append(map(float, r))
-    return numpy.array(float_array)
+    try:
+        with open(file_path, 'rb') as f:
+            row_reader = csv.reader(f)
+            for r in itertools.ifilter(None, row_reader):
+                float_array.append(map(float, r))
+        return numpy.array(float_array)
+    except ValueError as e:
+        raise IOError(str(e))
+    
     
 
 def verify_input_array(float_array, dim1, dim2):

@@ -189,6 +189,10 @@ def test_read_input_data_incorrect_matrix_shape_2():
 def test_read_image_data_not_an_image():
     read_image_data(VALID_SAMPLE_INPUT_FILEPATHS["csv"][0])
 
+@raises(IOError)
+def test_read_csv_data_not_csv():
+    read_csv_data(VALID_SAMPLE_INPUT_FILEPATHS["png"][0])
+
 def test_verify_input_array_valid():
     verify_input_array(Tns.csv_checker_8x8_expected, 8, 8)
 
