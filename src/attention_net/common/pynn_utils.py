@@ -10,8 +10,10 @@ import magic
 import numpy
 import os
 from PIL import Image
-
+import types
 import pyNN.nest as pynnn
+
+from utils import LOGGER
 
 class Weights(object):
     """Wraps a 2D array of floating-point numbers that has the same
@@ -240,7 +242,7 @@ class InputSample(object):
         self._array = [] 
         if isinstance(initializer, basestring):
             try:
-                self._array = read_input_data(intializer, dim1, dim2)
+                self._array = read_input_data(initializer, dim1, dim2)
             except IOError as e:
                 LOGGER.error("Could not read file %s.", initializer)
                 raise e

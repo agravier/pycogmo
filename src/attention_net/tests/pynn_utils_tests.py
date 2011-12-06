@@ -215,3 +215,53 @@ def test_verify_input_array_invalid_4():
     m = deepcopy(Tns.csv_checker_8x8_expected)
     m[3][3] = "a"
     verify_input_array(m, 8, 8)
+
+def test_input_sample_init_string_param_calls_read_input_data():
+    import common.pynn_utils
+    common.pynn_utils.read_input_data = Mock(return_value=[[1]])
+    path = "example"
+    InputSample(1, 1, path)
+    common.pynn_utils.read_input_data.assert_called_once_with(path, 1, 1)
+
+@raises(TypeError)
+def test_input_sample_init_fileobj_param_raises_type_error():
+    with open(VALID_SAMPLE_INPUT_FILEPATHS["csv"][0], 'rb') as f:
+        InputSample(1, 1, f)
+
+def test_input_sample_init_list_param():
+    s = InputSample(1, 1, [[1]])
+    assert s._array == [[1]]
+
+def test_input_sample_init_getitem_expand_param():
+    mock_obj = Mock(spec=list)
+    mock_obj.__getitem__ = Mock(return_value=[0,1,2])
+    s = InputSample(4, 3, mock_obj, expand=True)
+    expected = [((0,),),((1,),),((2,),)]
+    print mock_obj.__getitem__.call_args_list
+    assert mock_obj.__getitem__.call_args_list == expected
+    assert s._array == [[0,1,2]]*4
+
+def test_input_sample_init_getitem_param():
+    pass
+
+def test_input_sample_init_getitem_param():
+    pass
+
+def test_input_sample_init_getitem_param():
+    pass
+
+def test_input_sample_init_callable_param():
+    pass
+
+def test_input_sample_init_callable_param():
+    pass
+
+def test_input_sample_init_callable_param():
+    pass
+
+def test_input_sample_init_callable_param():
+    pass
+
+def test_input_sample_init_callable_param():
+    pass
+
