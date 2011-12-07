@@ -5,6 +5,7 @@ functionality.
 
 import csv
 import itertools
+import functools
 from math import isnan
 import magic
 import numpy
@@ -165,10 +166,6 @@ def read_input_data(file_path, dim1, dim2):
     m = magic.Magic(mime=True)
     mime = m.from_file(file_path)
     mime = mime.lower().split('/')
-    # buf = None
-    # with open(file_path, 'rb') as f:
-    #     buf = file_descr.read(1024)
-    # file_descr.seek(-1024, os.SEEK_CUR)
     float_array = None
     if mime[0] == 'image':
         float_array = read_image_data(file_path)
@@ -240,6 +237,8 @@ class InputSample(object):
         InputSample created is mutable. If expand is False, the
         InputSample is immutable."""
         self._array = [] 
+        self._getitem = lambda k: self._array[k]
+        self._setitem = self._assign_to_array
         if isinstance(initializer, basestring):
             try:
                 self._array = read_input_data(initializer, dim1, dim2)
@@ -255,31 +254,31 @@ class InputSample(object):
         elif hasattr(initializer, '__getitem__'):
             if expand:
                 for x in xrange(dim1):
-                    self._array[x] = []
+                    self._array.append([])
                     for y in xrange(dim2):
-                        self._array[x][y].append(initializer[x][y])
-                verify_input_array(self._array)
+                        self._array[x].append(initializer[x][y])
+                verify_input_array(self._array, dim1, dim2)
             else:
-                self.__getitem__ = lambda x: initializer[x]
-                self.__setitem__ = self._raise_immutable
+                self._array = initializer
+                self._setitem = self._raise_immutable
         elif hasattr(initializer, '__call__'): 
             # to restrict to functions:
             # isinstance(initializer, 
             #            (types.FunctionType, types.BuiltinFunctionType))
             if expand:
                 for x in xrange(dim1):
-                    self._array[x] = []
+                    self._array.append([])
                     for y in xrange(dim2):
-                        self._array[x][y].append(initializer(x,y))
-                verify_input_array(self._array)
+                        self._array[x].append(initializer(x,y))
+                verify_input_array(self._array, dim1, dim2)
             else:
                 class InitCont(object):
                     def __init__(self, x):
                         self._x = x
-                    def __getitem__(y): 
-                        return initializer(x, y)
-                self.__getitem__ = lambda x: InitCont(x)
-                self.__setitem__ = self._raise_immutable
+                    def __getitem__(self, y): 
+                        return initializer(self._x, y)
+                self._getitem = lambda x: InitCont(x)
+                self._setitem = self._raise_immutable
         self._dim1 = dim1
         self._dim2 = dim2
 
@@ -288,8 +287,11 @@ class InputSample(object):
                         "immutable InputSample (created with "
                         "expand=False)")
 
-    def __getitem__(k):
-        return self._array[k]
+    def _assign_to_array(self, k, v):
+        self._array[k] = v
 
-    def __setitem__(k, v):
-        sef._array[k] = v
+    def __getitem__(self, k):
+        return self._getitem(k)
+
+    def __setitem__(self, k, v):
+        self._setitem(k, v)

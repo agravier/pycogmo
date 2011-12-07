@@ -216,9 +216,19 @@ def test_verify_input_array_invalid_4():
     m[3][3] = "a"
     verify_input_array(m, 8, 8)
 
+def mock_read_input_data_setup():
+    import common.pynn_utils
+    Tns.rid_patcher = patch("common.pynn_utils.read_input_data")
+    Tns.rid_mock = Tns.rid_patcher.start()
+    Tns.rid_mock.return_value=[[1]]
+
+def mock_read_input_data_teardown():
+    Tns.rid_patcher.stop()
+    del Tns.rid_mock
+
+@with_setup(mock_read_input_data_setup, mock_read_input_data_teardown)
 def test_input_sample_init_string_param_calls_read_input_data():
     import common.pynn_utils
-    common.pynn_utils.read_input_data = Mock(return_value=[[1]])
     path = "example"
     InputSample(1, 1, path)
     common.pynn_utils.read_input_data.assert_called_once_with(path, 1, 1)
@@ -233,35 +243,62 @@ def test_input_sample_init_list_param():
     assert s._array == [[1]]
 
 def test_input_sample_init_getitem_expand_param():
-    mock_obj = Mock(spec=list)
+    mock_obj = Mock()
     mock_obj.__getitem__ = Mock(return_value=[0,1,2])
+    mock_obj.__setitem__ = Mock()
     s = InputSample(4, 3, mock_obj, expand=True)
-    expected = [((0,),),((1,),),((2,),)]
-    print mock_obj.__getitem__.call_args_list
-    assert mock_obj.__getitem__.call_args_list == expected
     assert s._array == [[0,1,2]]*4
+    expected = [((0,),{})]*3+[((1,),{})]*3+[((2,),{})]*3+[((3,),{})]*3
+    assert mock_obj.__getitem__.call_args_list == expected
+    s[3] = ["s"]
+    assert s._setitem == s._assign_to_array
+    assert not mock_obj.__setitem__.called # expand=T copied the contents
 
-def test_input_sample_init_getitem_param():
-    pass
+def test_input_sample_init_getitem_noexpand_param():
+    mock_obj = Mock()
+    mock_obj.__getitem__ = Mock(return_value=[0,1,2])
+    mock_obj.__setitem__ = Mock()
+    s = InputSample(4, 3, mock_obj, expand=False)
+    assert hasattr(s, '__getitem__')
+    assert s[1] == [0,1,2]
+    mock_obj.__getitem__.assert_called_once_with(1)
 
-def test_input_sample_init_getitem_param():
-    pass
+@raises(TypeError)
+def test_input_sample_init_getitem_noexpand_param_setitem_raises_typerr():
+    mock_obj = Mock()
+    mock_obj.__getitem__ = Mock(return_value=[0,1,2])
+    s = InputSample(4, 3, mock_obj, expand=False)
+    s[3] = ["s"]
 
-def test_input_sample_init_getitem_param():
-    pass
+def test_input_sample_init_callable_expand_param():
+    mock_obj = Mock(return_value=2)
+    s = InputSample(4, 3, mock_obj, expand=True)
+    assert s._array == [[2]*3]*4
+    expected = zip(itertools.product(range(4),range(3)), itertools.repeat({}))
+    assert mock_obj.call_args_list == expected
+    mock_obj.reset_mock()
+    mock_obj.__setitem__ = Mock()
+    s[3] = ["s"]
+    assert s._setitem == s._assign_to_array
+    assert not mock_obj.__setitem__.called
 
-def test_input_sample_init_callable_param():
-    pass
+def test_input_sample_init_callable_noexpand_param():
+    mock_obj = Mock(return_value=2)
+    s = InputSample(4, 3, mock_obj, expand=False)
+    assert hasattr(s[3], '__getitem__')
+    assert s[3][4] == 2
+    mock_obj.assert_called_once_with(3, 4)
 
-def test_input_sample_init_callable_param():
-    pass
+@raises(TypeError)
+def test_input_sample_init_callable_noexpand_param_setitem_raises_typerr():
+    mock_obj = Mock(return_value=2)
+    s = InputSample(4, 3, mock_obj, expand=False)
+    s[3] = ["s"]
 
-def test_input_sample_init_callable_param():
-    pass
-
-def test_input_sample_init_callable_param():
-    pass
-
-def test_input_sample_init_callable_param():
-    pass
-
+def test_input_sample_access_and_mod_real_file():
+    s = InputSample(8, 8, VALID_SAMPLE_INPUT_FILEPATHS['png'][0])
+    for i, l in enumerate(Tns.png_checker_8x8_expected):
+        for j, c in enumerate(l):
+            assert s[i][j] == c
+    s[7][7] = 0.5
+    assert s[7][7] == 0.5
