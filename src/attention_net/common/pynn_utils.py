@@ -25,6 +25,12 @@ class Weights(object):
     def __init__(self, weights_array, l_rate = 0.01):
         self._weights = numpy.array(weights_array)
         self._default_l_rate = l_rate
+        shape = self._weights.shape
+        self._dim1 = shape[0]
+        if len(shape) > 1:
+            self._dim2 = shape[1]
+        else:
+            self._dim2 = 0
 
     def __eq__(self, other):
         internalw = None
@@ -52,6 +58,10 @@ class Weights(object):
                 if v1 != v2:
                     return False
         return True
+
+    @property
+    def shape(self):
+        return self._dim1, self._dim2
 
     @property
     def weights(self):
@@ -104,7 +114,7 @@ class RectilinearInputLayer(object):
     dim2) as the PyNN population in which it injects current. The
     stimulation scale can be adjusted by providing the max input
     amplitude in nA."""
-    def __init__(self, target_pynn_pop, dim1, dim2, max_namp):
+    def __init__(self, target_pynn_pop, dim1, dim2, max_namp=100):
         self.electrodes = []
         for x in xrange(dim1):
             self.electrodes.append([])
@@ -132,7 +142,8 @@ class RectilinearInputLayer(object):
         the input population. A max_namp value can be specfied in
         nanoamperes to override the max current corresponding to an
         input value of 1 given at construction time. dcsource_class is
-        here as a primitive dependency injection facility."""
+        here as a primitive dependency injection facility, for
+        testing.""" 
         if max_namp == None:
             max_namp = self.input_scaling
         for x in xrange(self._dim1):
@@ -159,8 +170,8 @@ class InvalidMatrixShapeError(Exception):
     def __str__(self):
         return ("The required input data shape should be "
                 "%s,%s, but the shape of the data provided is "
-                "%s,%s.") % self._req[0], self._req[1], \
-                self._prov[0], self._prov[1]
+                "%s,%s.") % (self._req[0], self._req[1], \
+                self._prov[0], self._prov[1])
 
 def read_input_data(file_path, dim1, dim2):
     m = magic.Magic(mime=True)
@@ -197,8 +208,6 @@ def read_csv_data(file_path):
         return numpy.array(float_array)
     except ValueError as e:
         raise IOError(str(e))
-    
-    
 
 def verify_input_array(float_array, dim1, dim2):
     d1 = len(float_array)
@@ -257,7 +266,6 @@ class InputSample(object):
                     self._array.append([])
                     for y in xrange(dim2):
                         self._array[x].append(initializer[x][y])
-                verify_input_array(self._array, dim1, dim2)
             else:
                 self._array = initializer
                 self._setitem = self._raise_immutable
@@ -270,7 +278,6 @@ class InputSample(object):
                     self._array.append([])
                     for y in xrange(dim2):
                         self._array[x].append(initializer(x,y))
-                verify_input_array(self._array, dim1, dim2)
             else:
                 class InitCont(object):
                     def __init__(self, x):
@@ -281,6 +288,8 @@ class InputSample(object):
                 self._setitem = self._raise_immutable
         self._dim1 = dim1
         self._dim2 = dim2
+        if expand:
+            verify_input_array(self._array, dim1, dim2)
 
     def _raise_immutable(*args):
         raise TypeError("Attempted change of state on an "  
@@ -295,3 +304,7 @@ class InputSample(object):
 
     def __setitem__(self, k, v):
         self._setitem(k, v)
+
+    @property
+    def shape(self):
+        return self._dim1, self._dim2

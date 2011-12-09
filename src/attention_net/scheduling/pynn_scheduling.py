@@ -4,7 +4,8 @@
 
 import pyNN.nest as pynnn
 import SimPy.Simulation as sim
-from common.pynn_utils import InputSample
+from common.pynn_utils import \
+    InputSample, RectilinearInputLayer, InvalidMatrixShapeError
 from common.utils import LOGGER, optimal_rounding
 
 SIMPY_END_T = -1
@@ -50,30 +51,37 @@ def run_simulation(end_time = None):
         
 
 class InputPresentation(sim.Process):
-    def __init__(self, input_layer, input_sample, duration):
+    def __init__(self, input_sample, input_layer, duration):
         """Process presenting input_sample (class
         common.pynn_utils.InputSample) to input_layer (class
-        common.pynn_utils.RectilinearInputLayer)"""
-        Process.__init__(self)
+        common.pynn_utils.RectilinearInputLayer) for duration ms."""
+        sim.Process.__init__(self)
         self.name = "Presentation of " + str(input_sample) + \
-            " to " + population.label
-        self.population = population
+            " to " + input_layer.pynn_population.label
+        if input_layer.shape != input_sample.shape:
+            raise InvalidMatrixShapeError(input_layer.shape[0],
+                                          input_layer.shape[1],
+                                          input_sample.shape[0],
+                                          input_sample.shape[1])
+        self.input_layer = input_layer
         self.input_sample = input_sample
+        self.duration = duration
     
     def ACTIONS(self):
         LOGGER.debug("%s starting", self.name)
-        TODO
+        self.input_layer.apply_input(self.input_sample, sim.now(),
+                                     self.duration)
         yield sim.hold, self, 0
 
 
-def schedule_input_presentation(population, 
-                                input_sample, 
+def schedule_input_presentation(input_sample, 
+                                population,
                                 duration,
                                 start_t = None):
     """Schedule the constant application of the input sample to the
     population, for duration ms, by default from start_t = current end
     of simulation, extending the simulation's scheduled end
-    SIMPY_END_T by duration milliseconds."""
+    SIMPY_END_T by the necessary number amount of time."""
     global SIMPY_END_T
     if start_t == None:
         start_t = SIMPY_END_T

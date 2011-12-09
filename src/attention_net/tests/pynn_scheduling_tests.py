@@ -1,7 +1,28 @@
 #!/usr/bin/env python2
 
+from mock import Mock, patch
 from nose import with_setup
+from nose.tools import eq_, raises, timed, nottest
+
+from common.pynn_utils import InputSample, RectilinearInputLayer,\
+    InvalidMatrixShapeError
 from scheduling.pynn_scheduling import *
+
+from tests.pynn_utils_tests import \
+    Tns, setup_weights, setup_pynn_populations, setup_rectinilearinputlayers
+
+
+FULL_BINARY_CHECKER = [[1, 0, 1, 0, 1, 0, 1, 0],
+                       [0, 1, 0, 1, 0, 1, 0, 1],
+                       [1, 0, 1, 0, 1, 0, 1, 0],
+                       [0, 1, 0, 1, 0, 1, 0, 1],
+                       [1, 0, 1, 0, 1, 0, 1, 0],
+                       [0, 1, 0, 1, 0, 1, 0, 1],
+                       [1, 0, 1, 0, 1, 0, 1, 0],
+                       [0, 1, 0, 1, 0, 1, 0, 1]]
+
+def setup_input_samples():
+    Tns.s1 = InputSample(8, 8, FULL_BINARY_CHECKER)
 
 class TestProcess(sim.Process):
     def __init__(self, duration=0):
@@ -40,7 +61,6 @@ def test_run_simulation():
     assert sim.now() == 10
     assert pynnn.get_current_time() == 10 # relaxed cond  <= 10
     run_simulation(end_time = 20)
-    print ("curtime ",  pynnn.get_current_time(), sim.now())
     assert sim.now() == 20
     assert pynnn.get_current_time() == 20
     run_simulation(end_time = 70)
@@ -62,3 +82,21 @@ def test_run_simulation():
     run_simulation(end_time = 300)
     assert sim.now() == 300
     assert pynnn.get_current_time() == 300
+
+@with_setup(setup_rectinilearinputlayers)
+@with_setup(setup_input_samples)
+def test_input_presentation_init_correct_shape():
+    p = InputPresentation(Tns.s1, Tns.ril1, 1)
+    assert p.duration == 1
+
+@with_setup(setup_rectinilearinputlayers)
+@raises(InvalidMatrixShapeError)
+def test_input_presentation_init_incorrect_shape1():
+    p = InputPresentation(InputSample(7, 8, [[0]*8]*7), Tns.ril1, 1)
+
+@with_setup(setup_rectinilearinputlayers)
+@raises(InvalidMatrixShapeError)
+def test_input_presentation_init_incorrect_shape2():
+    p = InputPresentation(InputSample(8, 7, [[0]*7]*8), Tns.ril1, 1)
+
+# TODO: mock InputLayer.apply_input and verify InputPresentation PEM
