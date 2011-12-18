@@ -8,7 +8,7 @@ from common.pynn_utils import \
     InputSample, RectilinearInputLayer, InvalidMatrixShapeError
 from common.utils import LOGGER, optimal_rounding
 
-SIMPY_END_T = -1
+SIMPY_END_T = 0
 
 PYNN_TIME_STEP = pynnn.get_time_step()
 PYNN_TIME_ROUNDING = optimal_rounding(PYNN_TIME_STEP)
@@ -75,16 +75,18 @@ class InputPresentation(sim.Process):
 
 
 def schedule_input_presentation(input_sample, 
-                                population,
+                                input_layer,
                                 duration,
                                 start_t = None):
     """Schedule the constant application of the input sample to the
-    population, for duration ms, by default from start_t = current end
-    of simulation, extending the simulation's scheduled end
+    input layer, for duration ms, by default from start_t = current
+    end of simulation, extending the simulation's scheduled end
     SIMPY_END_T by the necessary number amount of time."""
     global SIMPY_END_T
     if start_t == None:
         start_t = SIMPY_END_T
+    p = InputPresentation(input_sample, input_layer, duration)
+    p.start(at=start_t)
     if start_t + duration > SIMPY_END_T:
         SIMPY_END_T = start_t + duration
-    
+

@@ -3,6 +3,7 @@
 from mock import Mock, patch
 from nose import with_setup
 from nose.tools import eq_, raises, timed, nottest
+import SimPy.Simulation as sim
 
 from common.pynn_utils import InputSample, RectilinearInputLayer,\
     InvalidMatrixShapeError
@@ -99,4 +100,39 @@ def test_input_presentation_init_incorrect_shape1():
 def test_input_presentation_init_incorrect_shape2():
     p = InputPresentation(InputSample(8, 7, [[0]*7]*8), Tns.ril1, 1)
 
-# TODO: mock InputLayer.apply_input and verify InputPresentation PEM
+def mock_input_layer_apply_input_setup():
+    Tns.il_ai_patcher = patch("common.pynn_utils.RectilinearInputLayer.apply_input")
+    Tns.il_ai_mock = Tns.il_ai_patcher.start()
+
+def mock_input_layer_apply_input_teardown():
+    Tns.il_ai_patcher.stop()
+    del Tns.il_ai_mock
+
+def setup_samples_layers_sim():
+    setup_rectinilearinputlayers()
+    setup_input_samples()
+    setup_clean_simpy()
+
+@with_setup(mock_input_layer_apply_input_setup, mock_input_layer_apply_input_teardown)
+@with_setup(setup_samples_layers_sim)
+def test_input_presentation_actions():
+    p = InputPresentation(Tns.s1, Tns.ril1, 1)
+    p.ACTIONS().next()
+    now = sim.now()
+    Tns.il_ai_mock.assert_called_once_with(Tns.s1, now, 1)
+
+@with_setup(setup_samples_layers_sim)
+def test_schedule_input_presentation():
+    schedule_input_presentation(Tns.s1, 
+                                Tns.ril1,
+                                10,
+                                start_t = None)
+    assert sim.peek() == sim.now()
+    schedule_input_presentation(Tns.s1, 
+                                Tns.ril1,
+                                10,
+                                start_t = 20)
+    assert sim.Globals.allEventTimes() == [0,20]
+    from scheduling.pynn_scheduling import SIMPY_END_T as end_t
+    assert end_t == 30
+    
