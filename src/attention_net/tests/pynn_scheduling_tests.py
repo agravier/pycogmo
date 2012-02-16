@@ -56,6 +56,7 @@ def test_run_simulation_no_event():
 @with_setup(setup_test_process)
 def test_run_simulation():
     run_simulation(end_time = 0)
+    assert get_current_time() == sim.now()
     assert sim.now() == 0
     assert pynnn.get_current_time() == 0
     run_simulation(end_time = 10)
@@ -79,6 +80,7 @@ def test_run_simulation():
     assert pynnn.get_current_time() == 203
     run_simulation()
     assert sim.now() == 205
+    assert get_current_time() == sim.now()
     assert pynnn.get_current_time() == 205
     run_simulation(end_time = 300)
     assert sim.now() == 300
@@ -87,18 +89,18 @@ def test_run_simulation():
 @with_setup(setup_rectinilearinputlayers)
 @with_setup(setup_input_samples)
 def test_input_presentation_init_correct_shape():
-    p = InputPresentation(Tns.s1, Tns.ril1, 1)
+    p = InputPresentation(Tns.ril1, Tns.s1, 1)
     assert p.duration == 1
 
 @with_setup(setup_rectinilearinputlayers)
 @raises(InvalidMatrixShapeError)
 def test_input_presentation_init_incorrect_shape1():
-    p = InputPresentation(InputSample(7, 8, [[0]*8]*7), Tns.ril1, 1)
+    p = InputPresentation(Tns.ril1, InputSample(7, 8, [[0]*8]*7), 1)
 
 @with_setup(setup_rectinilearinputlayers)
 @raises(InvalidMatrixShapeError)
 def test_input_presentation_init_incorrect_shape2():
-    p = InputPresentation(InputSample(8, 7, [[0]*7]*8), Tns.ril1, 1)
+    p = InputPresentation(Tns.ril1, InputSample(8, 7, [[0]*7]*8), 1)
 
 def mock_input_layer_apply_input_setup():
     Tns.il_ai_patcher = patch("common.pynn_utils.RectilinearInputLayer.apply_input")
@@ -116,23 +118,22 @@ def setup_samples_layers_sim():
 @with_setup(mock_input_layer_apply_input_setup, mock_input_layer_apply_input_teardown)
 @with_setup(setup_samples_layers_sim)
 def test_input_presentation_actions():
-    p = InputPresentation(Tns.s1, Tns.ril1, 1)
+    p = InputPresentation(Tns.ril1, Tns.s1, 1)
     p.ACTIONS().next()
     now = sim.now()
     Tns.il_ai_mock.assert_called_once_with(Tns.s1, now, 1)
 
 @with_setup(setup_samples_layers_sim)
 def test_schedule_input_presentation():
-    schedule_input_presentation(Tns.s1, 
-                                Tns.ril1,
-                                10,
-                                start_t = None)
+    schedule_input_presentation(Tns.p1,
+                                Tns.s1, 
+                                10)
     assert sim.peek() == sim.now()
-    schedule_input_presentation(Tns.s1, 
-                                Tns.ril1,
+    schedule_input_presentation(Tns.p1,
+                                Tns.s1, 
                                 10,
                                 start_t = 20)
     assert sim.Globals.allEventTimes() == [0,20]
     from scheduling.pynn_scheduling import SIMPY_END_T as end_t
     assert end_t == 30
-    
+

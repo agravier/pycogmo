@@ -50,3 +50,15 @@ def optimal_rounding(timestep):
 
 def splice(deep_list):
     return list(itertools.chain.from_iterable(deep_list))
+
+def is_square(n):
+    if n == 0 or n == 1:
+        return True
+    x = n // 2
+    seen = set([x])
+    while x * x != n:
+        x = (x + (n // x)) // 2
+        if x in seen:
+             return False
+        seen.add(x)
+    return True
