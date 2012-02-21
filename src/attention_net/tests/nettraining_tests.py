@@ -10,3 +10,5 @@ from scheduling.nettraining import *
 
 DUMMY_LOGGER = logging.getLogger("testLogger")
 DUMMY_LOGGER.addHandler(NullHandler())
+
+# TODO Check for runaway positive feeback of SOM units

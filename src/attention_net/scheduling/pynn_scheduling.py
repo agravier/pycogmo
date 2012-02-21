@@ -4,11 +4,11 @@
 
 import pyNN.nest as pynnn
 import SimPy.Simulation as sim
-from common.pynn_utils import \
+from common.pynn_utils import get_input_layer, \
     InputSample, RectilinearInputLayer, InvalidMatrixShapeError
 from common.utils import LOGGER, optimal_rounding
 
-SIMPY_END_T = -1
+SIMPY_END_T = 0
 
 PYNN_TIME_STEP = pynnn.get_time_step()
 PYNN_TIME_ROUNDING = optimal_rounding(PYNN_TIME_STEP)
@@ -51,7 +51,7 @@ def run_simulation(end_time = None):
         
 
 class InputPresentation(sim.Process):
-    def __init__(self, input_sample, input_layer, duration):
+    def __init__(self, input_layer, input_sample, duration):
         """Process presenting input_sample (class
         common.pynn_utils.InputSample) to input_layer (class
         common.pynn_utils.RectilinearInputLayer) for duration ms."""
@@ -74,17 +74,27 @@ class InputPresentation(sim.Process):
         yield sim.hold, self, 0
 
 
-def schedule_input_presentation(input_sample, 
-                                population,
+def schedule_input_presentation(population,
+                                input_sample, 
                                 duration,
                                 start_t = None):
     """Schedule the constant application of the input sample to the
-    population, for duration ms, by default from start_t = current end
-    of simulation, extending the simulation's scheduled end
+    input layer, for duration ms, by default from start_t = current
+    end of simulation, extending the simulation's scheduled end
     SIMPY_END_T by the necessary number amount of time."""
     global SIMPY_END_T
+    input_layer = get_input_layer(population)
     if start_t == None:
         start_t = SIMPY_END_T
+    p = InputPresentation(input_layer, input_sample, duration)
+    p.start(at=start_t)
     if start_t + duration > SIMPY_END_T:
         SIMPY_END_T = start_t + duration
-    
+
+def schedule_output_rate_calculation(population, duration):
+    pass #TODO
+
+def get_current_time():
+    return sim.now()
+
+

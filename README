@@ -7,6 +7,7 @@ Non-python dependencies:
 - VTK (The Visualization Toolkit) + Python 2 bindings
 
 Python pip-installable dependencies:
+- coverage
 - PyNN
 - SimPy
 - mock

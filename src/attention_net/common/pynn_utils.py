@@ -6,15 +6,35 @@ functionality.
 import csv
 import itertools
 import functools
-from math import isnan
+from math import isnan, ceil
 import magic
+import math
 import numpy
 import os
 from PIL import Image
-import types
 import pyNN.nest as pynnn
+import SimPy.Simulation as sim
+import types
 
-from utils import LOGGER
+from utils import LOGGER, is_square
+
+class InvalidFileFormatError(Exception):
+    def __init__(self, mime_type, mime_subtype):
+        self._type = mime_type
+        self._subtype  = mime_subtype
+    def __str__(self):
+        return "%s files of type %s are not supported." % \
+            self._type, self._subtype
+
+class InvalidMatrixShapeError(Exception):
+    def __init__(self, req_dim1, req_dim2, prov_dim1, prov_dim2):
+        self._req = req_dim1, req_dim2
+        self._prov = prov_dim1, prov_dim2
+    def __str__(self):
+        return ("The required input data shape should be "
+                "%s,%s, but the shape of the data provided is "
+                "%s,%s.") % (self._req[0], self._req[1], \
+                self._prov[0], self._prov[1])
 
 class Weights(object):
     """Wraps a 2D array of floating-point numbers that has the same
@@ -113,70 +133,6 @@ def get_weights(proj):
 def set_weights(proj, w):
     if isinstance(w, Weights):
         proj.setWeights(w.weights)
-
-class RectilinearInputLayer(object):
-    """Wraps a 2D array of electrodes with the same dimensions (dim1,
-    dim2) as the PyNN population in which it injects current. The
-    stimulation scale can be adjusted by providing the max input
-    amplitude in nA."""
-    def __init__(self, target_pynn_pop, dim1, dim2, max_namp=100):
-        self.electrodes = []
-        for x in xrange(dim1):
-            self.electrodes.append([])
-            for y in xrange(dim2):
-                self.electrodes[x].append([None, 
-                                           target_pynn_pop[x*dim2+y]])
-        self.input_scaling = max_namp
-        self._dim1 = dim1
-        self._dim2 = dim2
-        self.pynn_population = target_pynn_pop
-    
-    @property
-    def shape(self):
-        return self._dim1, self._dim2
-
-    def __getitem__(self, i):
-        return self.electrodes[i]
-
-    # DCSources have to be recreated each time.
-    def apply_input(self, sample, start_time, duration,
-                    max_namp = None, dcsource_class = pynnn.DCSource):
-        """Given a sample of type InputSample and of same shape as the
-        input layer, and a duration, creates and connects electrodes
-        that apply the input specified by the input sample matrix to
-        the input population. A max_namp value can be specfied in
-        nanoamperes to override the max current corresponding to an
-        input value of 1 given at construction time. dcsource_class is
-        here as a primitive dependency injection facility, for
-        testing.""" 
-        if max_namp == None:
-            max_namp = self.input_scaling
-        for x in xrange(self._dim1):
-            for y in xrange(self._dim2):
-                # Will the GC collect the electrodes? Does PyNN delete
-                # them after use?
-                self.electrodes[x][y][0] = \
-                    dcsource_class(amplitude=max_namp * sample[x][y], 
-                                   start=start_time, 
-                                   stop=start_time+duration)
-
-class InvalidFileFormatError(Exception):
-    def __init__(self, mime_type, mime_subtype):
-        self._type = mime_type
-        self._subtype  = mime_subtype
-    def __str__(self):
-        return "%s files of type %s are not supported." % \
-            self._type, self._subtype
-
-class InvalidMatrixShapeError(Exception):
-    def __init__(self, req_dim1, req_dim2, prov_dim1, prov_dim2):
-        self._req = req_dim1, req_dim2
-        self._prov = prov_dim1, prov_dim2
-    def __str__(self):
-        return ("The required input data shape should be "
-                "%s,%s, but the shape of the data provided is "
-                "%s,%s.") % (self._req[0], self._req[1], \
-                self._prov[0], self._prov[1])
 
 def read_input_data(file_path, dim1, dim2):
     m = magic.Magic(mime=True)
@@ -313,3 +269,180 @@ class InputSample(object):
     @property
     def shape(self):
         return self._dim1, self._dim2
+
+class RectilinearLayerAdapter(object):
+    """Base class adapting PyNN layers."""
+    def __init__(self, pynn_pop, dim1, dim2):
+        self.unit_adapters_mat = []
+        for x in xrange(dim1):
+            self.unit_adapters_mat.append([])
+            for y in xrange(dim2):
+                self.unit_adapters_mat[x].append([None, 
+                                           pynn_pop[x*dim2+y]])
+        self._dim1 = dim1
+        self._dim2 = dim2
+        self.pynn_population = pynn_pop
+
+    @property
+    def shape(self):
+        return self._dim1, self._dim2
+
+    def __getitem__(self, i):
+        return self.unit_adapters_mat[i]
+
+class RectilinearInputLayer(RectilinearLayerAdapter):
+    """Wraps a 2D array of electrodes with the same dimensions (dim1,
+    dim2) as the PyNN population in which it injects current. The
+    stimulation scale can be adjusted by providing the max input
+    amplitude in nA."""
+    def __init__(self, pynn_pop, dim1, dim2, max_namp=100):
+        super(RectilinearInputLayer, self).__init__(pynn_pop, dim1, dim2)
+        self.input_scaling = max_namp
+
+    # DCSources have to be recreated each time.
+    def apply_input(self, sample, start_time, duration,
+                    max_namp = None, dcsource_class = pynnn.DCSource):
+        """Given a sample of type InputSample and of same shape as the
+        input layer, and a duration, creates and connects electrodes
+        that apply the input specified by the input sample matrix to
+        the input population. A max_namp value can be specfied in
+        nanoamperes to override the max current corresponding to an
+        input value of 1 given at construction time. dcsource_class is
+        here as a primitive dependency injection facility, for
+        testing.""" 
+        if max_namp == None:
+            max_namp = self.input_scaling
+        for x in xrange(self._dim1):
+            for y in xrange(self._dim2):
+                # Will the GC collect the electrodes? Does PyNN delete
+                # them after use?
+                self.unit_adapters_mat[x][y][0] = \
+                    dcsource_class(amplitude=max_namp * sample[x][y], 
+                                   start=start_time, 
+                                   stop=start_time+duration)
+
+class RectilinearOutputRateEncoder(RectilinearLayerAdapter):
+    """Keeps track of the weighted averages on a sliding window of the
+    output rates of all units in the topographically rectilinear
+    population of units."""
+    # Default width of the sliding window in simultor time units. The
+    # weight of past rates in acticity calculation decreases linearly
+    # so that it is 0 when window_width old, and 1 for sim.now()
+    DEFAULT_WINDOW_WIDTH = 100;
+    def __init__(self, pynn_pop, dim1, dim2, update_period,
+                 window_width=DEFAULT_WINDOW_WIDTH):
+        super(RectilinearOutputRateEncoder, self).__init__(pynn_pop, dim1, dim2)
+        self.window_width = window_width
+        self.update_period = update_period
+        # the number of records needs to be one more than requested
+        # because we are interested in the rate of firing, which is
+        # the difference in total number of spikes fired between now
+        # and 1 update peiod ago. In general, we need n+1 data points
+        # to determine n such differences.
+        self.hist_len = int(ceil(self.window_width/self.update_period)) + 1
+        for x in xrange(self._dim1):
+            for y in xrange(self._dim2):
+                self.unit_adapters_mat[x][y][0] = \
+                    numpy.zeros(self.hist_len, dtype=numpy.int)
+        self._weights_vec = make_weights_vec(self.hist_len)
+        self.idx = -1
+        self.update_history = numpy.zeros(self.hist_len, dtype=numpy.float)
+
+    def make_weights_vec(self, length):
+        """Returns a ndarray of length-1 linearly spaced floats
+        between 1/length and 1."""
+        return numpy.linspace(0, 1, num=length)[1:]
+    
+    def advance_idx(self):
+        self.idx = (self.idx+1) % self.hist_len
+
+    def previous_idx(self):
+        (self.idx-1) % self.hist_len
+    
+    # The data structure for the rate history of one unit is a
+    # circular list of rates, and an integer index (self.idx, common
+    # to all units) pointing to the most recent record. The size of
+    # this list is determined in __init__ by the window_width and
+    # update_period. Each unit's history is kept in the
+    # RectilinearLayerAdapter's unit_adapters_mat[x][y][0]. There is
+    # an additional circular list of updtes timestamps for testing.
+
+    # We assume that the necessary recorders have been set up.
+    def update_rates(self):
+        advance_idx()
+        self.update_history[self.idx] = sim.now()
+        rec = self.pynn_population.get_spike_counts();
+        for x in xrange(self._dim1):
+            for y in xrange(self._dim2):
+                self.unit_adapters_mat[x][y][0][self.idx] = \
+                    rec.get(self.pynn_population[x*dim2+y])
+
+    def get_rates(self):
+        r = numpy.zeros((self._dim1, _self.dim2), dtype=numpy.int)
+        for x in xrange(self._dim1):
+            for y in xrange(self._dim2):
+                r[x][y] = self.f_rate(self.unit_adapters_mat[x][y][0])
+        return r
+
+    def f_rate(self, np_a):
+        """Returns the weighted average of the rates recorded in the
+        differences of the array np_a."""
+        return self._weights_vec.dot(numpy.diff(np_a))
+
+# WARNING / TODO: The following function reveals a design flaw. PyNN is insufficient and its networks should be encapsulated along with more metadata.
+def population_adpater_provider(pop_prov_dict,
+                                provided_class,
+                                population):
+    """Factory function providing an adapter of the specified class for
+    the population parameter. pop_prov_dict is a dictionary taking a
+    (population, provided_class) tuple as key, and returning an
+    instance of provided_class."""
+    key = (population, provided_class)
+    if pop_prov_dict.has_key(key):
+        return pop_prov_dict[key]
+    else:
+        LOGGER.warning(("No %s for population %s, creating one assuming" 
+                       "a square shape."), provided_class.__name__,
+                       population.label)
+        if not is_square(population.size):
+            raise TypeError("The input layer shape could not be guessed.")
+        dim = int(math.sqrt(population.size))
+        inst = provided_class(population, dim, dim)
+    return pop_prov_dict.setdefault(key, inst)
+
+POP_ADAPT_DICT = {}
+
+get_input_layer = functools.partial(population_adpater_provider,
+                                    POP_ADAPT_DICT,
+                                    RectilinearInputLayer)
+get_input_layer.__doc__ = ("Provides a unique input layer for the"
+                           "given population.") 
+
+get_rate_encoder = functools.partial(population_adpater_provider,
+                                     POP_ADAPT_DICT,
+                                     RectilinearOutputRateEncoder) 
+get_rate_encoder.__doc__ = ("Provides a unique rectilinear output rate "
+                            "encoder for the given population.")
+
+
+# def get_input_layer(population):
+#     if POP_INPUT_DICT.has_key(population):
+#         return POP_INPUT_DICT[population]
+#     else:
+#         LOGGER.warning("No input layer for population %s, creating one assuming a square shape.", population.label)
+#         if not is_square(population.size):
+#             raise TypeError("The input layer shape could not be guessed.")
+#         dim = int(math.sqrt(population.size))
+#         ril = RectilinearInputLayer(population, dim, dim)
+#     return POP_INPUT_DICT.setdefault(population, ril)
+        
+# def get_rate_encoder(population):
+#     if POP_RATE_ENC_DICT.has_key(population):
+#         return POP_RATE_ENC_DICT[population]
+#     else:
+#         LOGGER.warning("No rate encoder for population %s, creating one assuming a square shape.", population.label)
+#         if not is_square(population.size):
+#             raise TypeError("The layer shape could not be guessed.")
+#         dim = int(math.sqrt(population.size))
+#         rore = RectilinearOutputRateEncoder(population, dim, dim)
+#     return POP_RATE_ENC_DICT.setdefault(population, rore)

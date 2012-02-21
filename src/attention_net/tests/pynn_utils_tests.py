@@ -35,9 +35,9 @@ Tns.png_checker_8x8_expected = [[1,0]*4,[0,1]*4]*4
 def list_units(ril):
     """Returns the list of PyNN units linked by the given rectilinear
     input layer."""
-    return [b for _, b in
-         list(splice(ril.electrodes))]
-
+    return [b for a, b in
+         list(splice(ril.unit_adapters_mat))]
+    
 def setup_weights():
     Tns.w0_array = []
     Tns.w0 = Weights(Tns.w0_array)
@@ -170,7 +170,7 @@ def test_weights_adjusted():
 
 @with_setup(setup_rectinilearinputlayers)
 def test_rectilinearinputlayer_init():
-    assert len(Tns.ril1.electrodes) == 8
+    assert len(Tns.ril1.unit_adapters_mat) == 8
     assert set(Tns.p1) == set(list_units(Tns.ril1))
     assert set(Tns.p2) == set(list_units(Tns.ril2))
 
@@ -340,3 +340,18 @@ def test_input_sample_access_and_mod_real_file():
             assert s[i][j] == c
     s[7][7] = 0.5
     assert s[7][7] == 0.5
+
+@with_setup(setup_pynn_populations)
+def test_get_input_layer():
+    p1i = get_input_layer(Tns.p1)
+    assert get_input_layer(Tns.p1) == p1i
+    assert get_input_layer(Tns.p2) != p1i
+    from common.pynn_utils import POP_ADAPT_DICT as d
+    assert (Tns.p1, RectilinearInputLayer) in d.keys()
+    assert (Tns.p2, RectilinearInputLayer) in d.keys()
+
+@raises(TypeError)
+def test_get_input_layer_nosq_raises_typeerr():
+    pop1 = Mock()
+    pop1.size = 10
+    get_input_layer(pop1)
