@@ -25,12 +25,7 @@ class Weights(object):
     def __init__(self, weights_array, l_rate = 0.01):
         self._weights = numpy.array(weights_array)
         self._default_l_rate = l_rate
-        shape = self._weights.shape
-        self._dim1 = shape[0]
-        if len(shape) > 1:
-            self._dim2 = shape[1]
-        else:
-            self._dim2 = 0
+        self._update_shape()
 
     def __eq__(self, other):
         internalw = None
@@ -59,6 +54,14 @@ class Weights(object):
                     return False
         return True
 
+    def _update_shape(self):
+        shape = self._weights.shape
+        self._dim1 = shape[0]
+        if len(shape) > 1:
+            self._dim2 = shape[1]
+        else:
+            self._dim2 = 0
+
     @property
     def shape(self):
         return self._dim1, self._dim2
@@ -83,6 +86,8 @@ class Weights(object):
             raise TypeError("Weights can be assigned to " 
                             "numpy.ndarray, common.pynn_utils.Weights,"
                             " or list types.") 
+        self._update_shape()
+
 
     def __getitem__(self, i):
         return self._weights[i]
@@ -93,7 +98,7 @@ class Weights(object):
     def adjusted(self, error_mat, learning=None):
         """Returns a matrix adjusted by removing the error terms
         matrix from the array, scaling the change by the learning
-        coerfficient (scalar) if available."""
+        coefficient (scalar) if available."""
         if learning == None:
             learning = self._default_l_rate
         if isinstance(error_mat, Weights):
@@ -291,7 +296,7 @@ class InputSample(object):
         if expand:
             verify_input_array(self._array, dim1, dim2)
 
-    def _raise_immutable(*args):
+    def _raise_immutable(self, *args):
         raise TypeError("Attempted change of state on an "  
                         "immutable InputSample (created with "
                         "expand=False)")

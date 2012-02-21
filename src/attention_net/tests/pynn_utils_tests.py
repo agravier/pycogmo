@@ -35,10 +35,12 @@ Tns.png_checker_8x8_expected = [[1,0]*4,[0,1]*4]*4
 def list_units(ril):
     """Returns the list of PyNN units linked by the given rectilinear
     input layer."""
-    return [b for a, b in
+    return [b for _, b in
          list(splice(ril.electrodes))]
 
 def setup_weights():
+    Tns.w0_array = []
+    Tns.w0 = Weights(Tns.w0_array)
     Tns.w1_array = [[j/63. for j in range(i*8,8+i*8)] 
                     for i in range(8)]
     Tns.w1 = Weights(Tns.w1_array)
@@ -72,15 +74,36 @@ def setup_rectinilearinputlayers():
 #     Tns.dcsource_patch = None
 
 @with_setup(setup_weights)
+def test_weights__init__empty():
+    "Test Weights.__init__ with an empty array"
+    assert Tns.w0._dim1 == 0
+    assert Tns.w0._dim2 == 0
+
+@with_setup(setup_weights)
 def test_weights_eq():
     assert Tns.w1_array == Tns.w1.weights, "initial data == property"
-    assert Tns.w1 == Weights(Tns.w1_array), "only the instance changes"
+    assert Tns.w1.__eq__(numpy.array(Tns.w1_array)), "weights == numpy array"
+    assert not Tns.w1.__eq__([1]), "length mismatch in dimension 1"
+    assert Tns.w1.__eq__(Weights(Tns.w1_array)), "only the instance changes"
     assert Tns.w2_array != Tns.w2.weights, "NaNs should not be equal" # Because of NaNs
-    assert Tns.w2 == Weights(Tns.w2_array), "NaNs should be ignored"
-    assert Tns.w1 != Tns.w2, "completetly different objects"
+    assert Tns.w2.__eq__(Weights(Tns.w2_array)), "NaNs should be ignored"
+    assert Tns.w1 != Tns.w2, "completely different objects, =="
+    assert not Tns.w1.__eq__(Tns.w2), "completely different objects, __eq__"
+    assert Tns.w0.__eq__([]), "empty weights == []"
+    assert Tns.w0.__eq__(numpy.array([])), "empty weights == empty numpy array"
+    assert not Tns.w0.__eq__(""), "incomparable classes"
+    del Tns.w1_array[2][2]
+    assert not Tns.w1.__eq__(numpy.array(Tns.w1_array)), "length mismatch in dimension 2"
+
+@with_setup(setup_weights)
+def test_weights_shape():
+    assert numpy.array(Tns.w1_array).shape == Tns.w1.shape
 
 @with_setup(setup_weights)
 def test_weights_accessors():
+    w = Weights([])
+    w.weights = numpy.array(Tns.w1_array)
+    assert Tns.w1 == w
     assert Tns.w1[1][2] == Tns.w1_array[1][2]
     Tns.w1[1][2] = 1
     assert Tns.w1[1][2] == 1
@@ -91,6 +114,11 @@ def test_weights_accessors():
     Tns.w1.weights = Tns.w2
     assert Tns.w1 == Tns.w2
     assert Tns.w2 == Weights(Tns.w2_array)
+
+@raises(TypeError)
+@with_setup(setup_weights)
+def test_weights_setter_raises_type_error():
+    Tns.w1.weights = "1"
 
 @raises(IndexError)
 @with_setup(setup_weights)
@@ -111,6 +139,16 @@ def test_weights_set_item_exception_1():
 @with_setup(setup_weights)
 def test_weights_set_item_exception_2():
     Tns.w1[1][2000] = 1
+
+@with_setup(setup_weights)
+def test_weights_set_item_one_dim():
+    Tns.w1[0] = range(8)
+    assert Tns.w1[0][2] == 2
+
+@raises(ValueError)
+@with_setup(setup_weights)
+def test_weights_set_item_one_dim_dimension_mismatch():
+    Tns.w1[0] = range(2)
 
 @with_setup(setup_weights)
 def test_weights_adjusted():

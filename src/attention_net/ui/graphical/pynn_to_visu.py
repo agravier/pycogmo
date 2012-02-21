@@ -4,6 +4,7 @@ import itertools
 import math
 import pyNN.nest as pynnn
 from visualisation import VisualisableNetworkStructure
+from common.utils import LOGGER
 
 class AdapterLockedError(Exception):
     pass
@@ -34,7 +35,7 @@ class PynnToVisuAdapter(object):
             raise AdapterLockedError()
             
     def commit_structure(self):
-        """Adds all units to the outout network structure, sorted by
+        """Adds all units to the output network structure, sorted by
         PyNN ID, and closes the adapter to prevent further structural
         change."""
         self.assert_open()
@@ -83,7 +84,7 @@ class PynnToVisuAdapter(object):
         """Records a projection from sending_population to
         receiving_population. The connection_manager parameter
         expects a pyNN.nest.simulator.ConnectionManager, it can be
-        obtrained by
+        obtained by
         pyNN.nest.simulator.Projection.connection_manager.
         """
         self.assert_open()
@@ -111,5 +112,5 @@ class PynnToVisuAdapter(object):
         # range and use a sigmoidal adjustment.
         if w > 1 or w < -1:
             w = min(max(w, -1), 1)
-            logger.info("convert_weights made a dummy adjustment.")
+            LOGGER.info("convert_weights made a dummy adjustment.")
         return w

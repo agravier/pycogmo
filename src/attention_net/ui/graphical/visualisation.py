@@ -48,7 +48,7 @@ class VisualisableNetworkStructure(object):
                              self.unit_id, other.unit_id, 
                              (self.x, self.y, self.z), 
                              (other.x, other.y, other.z))
-                return false
+                return False
             return e
         def __int__(self):
             return self.unit_id
