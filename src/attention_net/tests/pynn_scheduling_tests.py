@@ -5,12 +5,12 @@ from nose import with_setup
 from nose.tools import eq_, raises, timed, nottest
 import SimPy.Simulation as sim
 
-from common.pynn_utils import InputSample, RectilinearInputLayer,\
+from common.pynn_utils import InputSample, RectilinearInputLayer, \
     InvalidMatrixShapeError
 from scheduling.pynn_scheduling import *
 
-from tests.pynn_utils_tests import \
-    Tns, setup_weights, setup_pynn_populations, setup_rectinilearinputlayers
+from tests.pynn_utils_tests import Tns, setup_weights, \
+    setup_pynn_populations, setup_rectinilearinputlayers
 
 
 FULL_BINARY_CHECKER = [[1, 0, 1, 0, 1, 0, 1, 0],
