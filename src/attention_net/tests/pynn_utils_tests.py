@@ -70,6 +70,8 @@ def setup_mock_pynn_population():
     Tns.count_mock = Mock()
     Tns.p_mock.get_spike_counts.return_value = Tns.count_mock
     Tns.count_mock.get.return_value = 3
+    Tns.p_mock.label = "Mock population"
+    Tns.p_mock.size = 64
 
 
 def setup_rectinilearinputlayers():
@@ -84,10 +86,10 @@ def setup_rectinilinear_ouput_rate_encoders():
     setup_pynn_populations()
     Tns.rore1_update_p = 22
     Tns.rore1_win_width = 200
-    Tns.rore1_expected_h_len = 11
+    Tns.rore1_expected_h_len = 10
     Tns.rore2_update_p = 15
     Tns.rore2_win_width = 201
-    Tns.rore2_expected_h_len = 15
+    Tns.rore2_expected_h_len = 14
     Tns.rore1 = RectilinearOutputRateEncoder(Tns.p1, 8, 8,
                                              Tns.rore1_update_p,
                                              Tns.rore1_win_width)
@@ -523,9 +525,9 @@ def test_rectilinear_ouput_rate_encoder__init():
 @with_setup(setup_rectinilinear_ouput_rate_encoders)
 def test_rectilinear_ouput_rate_encoder_make_weights_vec():
     wv31 = Tns.rore1.make_weights_vec(31)
-    wv1 = RectilinearOutputRateEncoder.make_weights_vec(1)
-    wv2 = RectilinearOutputRateEncoder.make_weights_vec(2)
-    wv4 = RectilinearOutputRateEncoder.make_weights_vec(4)
+    wv1 = RectilinearOutputRateEncoder.make_weights_vec(0)
+    wv2 = RectilinearOutputRateEncoder.make_weights_vec(1)
+    wv4 = RectilinearOutputRateEncoder.make_weights_vec(3)
     assert (wv31 == RectilinearOutputRateEncoder.make_weights_vec(31)).all()
     assert (wv1 == numpy.array([])).all()
     assert (wv2 == numpy.array([1.0])).all()
@@ -553,20 +555,35 @@ def test_rectilinear_ouput_rate_encoder_update_rates_and_get_rates():
                                         Tns.rore1_win_width)
     rore.update_rates()
     Tns.count_mock.assert_called()
-    print splice(rore.get_rates())
+    print rore.get_rates()
     print rore.unit_adapters_mat
     for r in splice(rore.get_rates()):
         assert r == 3.0
 
 
-@with_setup(setup_rectinilinear_ouput_rate_encoders)
+@with_setup(setup_mock_pynn_population)
 def test_rectilinear_ouput_rate_encoder_f_rate():
-    assert False
+    rore = RectilinearOutputRateEncoder(Tns.p_mock, 8, 8, 2, 8)
+    np_a = numpy.array([4, 5, 10, 0, 0])
+    result_shift_3 = 5 * 1. + 1 * 3. / 4. + 4 * 2. / 4. + 0
+    rore.advance_idx()
+    rore.advance_idx()
+    rore.advance_idx()
+    rates = rore.f_rate(np_a)
+    assert rates == result_shift_3
 
 
-@with_setup(setup_pynn_populations)
+@with_setup(setup_mock_pynn_population)
 def test_population_adapter_provider():
-    assert False
+    d1 = {}
+    provided1 = population_adpater_provider(d1, RectilinearLayerAdapter,
+                                            Tns.p_mock)
+    assert provided1.shape == (8, 8)
+    assert provided1.pynn_population == Tns.p_mock
+    provided2 = RectilinearLayerAdapter(Tns.p_mock, 8, 8)
+    d2 = {(Tns.p_mock, RectilinearLayerAdapter): provided2}
+    assert population_adpater_provider(d2, RectilinearLayerAdapter,
+                                       Tns.p_mock) == provided2
 
 
 @raises(TypeError)
@@ -588,4 +605,9 @@ def test_get_input_layer():
 
 @with_setup(setup_pynn_populations)
 def test_rate_encoder():
-    assert False
+    re = get_rate_encoder(Tns.p1)
+    assert get_rate_encoder(Tns.p1) == re
+    assert get_rate_encoder(Tns.p2) != re
+    from common.pynn_utils import POP_ADAPT_DICT as d
+    assert (Tns.p1, RectilinearOutputRateEncoder) in d.keys()
+    assert (Tns.p2, RectilinearOutputRateEncoder) in d.keys()

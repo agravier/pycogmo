@@ -354,7 +354,9 @@ class RectilinearOutputRateEncoder(RectilinearLayerAdapter):
     # weight of past rates in activity calculation decreases linearly
     # so that it is 0 when window_width old, and 1 for sim.now()
     DEFAULT_WINDOW_WIDTH = 100;
-    def __init__(self, pynn_pop, dim1, dim2, update_period,
+    DEFAULT_UPDATE_PERIOD = 10
+    def __init__(self, pynn_pop, dim1, dim2,
+                 update_period = DEFAULT_UPDATE_PERIOD,
                  window_width=DEFAULT_WINDOW_WIDTH):
         super(RectilinearOutputRateEncoder, self).__init__(pynn_pop, dim1, dim2)
         self.window_width = window_width
@@ -364,20 +366,20 @@ class RectilinearOutputRateEncoder(RectilinearLayerAdapter):
         # the difference in total number of spikes fired between now
         # and 1 update period ago. In general, we need n+1 data points
         # to determine n such differences.
-        self.hist_len = int(ceil(self.window_width/self.update_period)) + 2
+        self.hist_len = int(ceil(self.window_width/self.update_period)) + 1
         for x in xrange(self._dim1):
             for y in xrange(self._dim2):
                 self.unit_adapters_mat[x][y][0] = \
                     numpy.zeros(self.hist_len, dtype=numpy.int)
-        self._weights_vec = self.make_weights_vec(self.hist_len)
+        self._weights_vec = self.make_weights_vec(self.hist_len - 1)
         self.idx = -1
         self.update_history = numpy.zeros(self.hist_len, dtype=numpy.float)
 
     @staticmethod
     def make_weights_vec(length):
-        """Returns a ndarray of length-1 linearly spaced floats
-        between 1/(length-1) inclusive and 1 inclusive."""
-        return numpy.linspace(0, 1, num=length)[1:]
+        """Returns an ndarray of length linearly spaced floats
+        between 1 inclusive and 1/length inclusive."""
+        return numpy.linspace(0, 1, num=length + 1)[1:]
     
     def advance_idx(self):
         self.idx = (self.idx + 1) % self.hist_len
@@ -414,9 +416,8 @@ class RectilinearOutputRateEncoder(RectilinearLayerAdapter):
     def f_rate(self, np_a):
         """Returns the weighted average of the rates recorded in the
         differences of the array np_a."""
-        return self._weights_vec.dot(numpy.diff(np_a[::-1]))
-        # TODO: take the current idx idx into account. The vector should be
-        # from idx+1 to idx, circular.
+        rates = numpy.diff(numpy.append(np_a[self.idx+1:], np_a[:self.idx+1]))
+        return self._weights_vec.dot(rates)
 
 
 # WARNING / TODO: The following function reveals a design flaw. PyNN is insufficient and its networks should be encapsulated along with more metadata.
@@ -426,7 +427,8 @@ def population_adpater_provider(pop_prov_dict,
     """Factory function providing an adapter of the specified class for
     the population parameter. pop_prov_dict is a dictionary taking a
     (population, provided_class) tuple as key, and returning an
-    instance of provided_class."""
+    instance of provided_class initialized with 3 arguments: the population,
+    its size in the first dimension, and its size in the second dimension."""
     key = (population, provided_class)
     if pop_prov_dict.has_key(key):
         return pop_prov_dict[key]
