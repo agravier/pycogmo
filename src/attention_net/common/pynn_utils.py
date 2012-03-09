@@ -329,7 +329,7 @@ class RectilinearInputLayer(RectilinearLayerAdapter):
         """Given a sample of type InputSample and of same shape as the
         input layer, and a duration, creates and connects electrodes
         that apply the input specified by the input sample matrix to
-        the input population. A max_namp value can be specfied in
+        the input population. A max_namp value can be specified in
         nanoamperes to override the max current corresponding to an
         input value of 1 given at construction time. dcsource_class is
         here as a primitive dependency injection facility, for
@@ -460,24 +460,6 @@ get_rate_encoder.__doc__ = ("Provides a unique rectilinear output rate "
                             "encoder for the given population.")
 
 
-# def get_input_layer(population):
-#     if POP_INPUT_DICT.has_key(population):
-#         return POP_INPUT_DICT[population]
-#     else:
-#         LOGGER.warning("No input layer for population %s, creating one assuming a square shape.", population.label)
-#         if not is_square(population.size):
-#             raise TypeError("The input layer shape could not be guessed.")
-#         dim = int(math.sqrt(population.size))
-#         ril = RectilinearInputLayer(population, dim, dim)
-#     return POP_INPUT_DICT.setdefault(population, ril)
-        
-# def get_rate_encoder(population):
-#     if POP_RATE_ENC_DICT.has_key(population):
-#         return POP_RATE_ENC_DICT[population]
-#     else:
-#         LOGGER.warning("No rate encoder for population %s, creating one assuming a square shape.", population.label)
-#         if not is_square(population.size):
-#             raise TypeError("The layer shape could not be guessed.")
-#         dim = int(math.sqrt(population.size))
-#         rore = RectilinearOutputRateEncoder(population, dim, dim)
-#     return POP_RATE_ENC_DICT.setdefault(population, rore)
+def get_current_time():
+    return sim.now()
+
