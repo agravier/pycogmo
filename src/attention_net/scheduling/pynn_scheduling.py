@@ -111,23 +111,34 @@ class RateCalculation(sim.Process):
     # The two conditions above are sufficient to ensure that exactly one last
     # call to each output rate encoder is performed at the end of the
     # simulation. 
-    def __init__(self, rate_encoder, end_t=None):
-        """expects a RectilinearOutputRateEncoder as parameter"""
+    def __init__(self, rate_encoder, end_t=None, correct_event_t=None):
+        """expects a RectilinearOutputRateEncoder as parameter. end_t is the 
+        time of the last recording to be scheduled. correct_event_t is a 
+        workaround for the fact that pyNN.nest does not allow processing events
+        at time 0. correct_event_t should be set when the current simulated time
+        will be different than what it should be."""
         sim.Process.__init__(self)
         self._rate_encoder = rate_encoder
         self._end_t = end_t
         self.name = "Rate calculation for population " + \
             self._rate_encoder.pynn_population.label
+        self._correct_event_t = correct_event_t
+
+    @property
+    def corrected_time(self):
+        if self._correct_event_t == None:
+            return get_current_time()
+        return self._correct_event_t
 
     def ACTIONS(self):
         global SIMULATION_END_T
         LOGGER.debug("%s starting", self.name)
         self._rate_encoder.update_rates()
-        if SIMULATION_END_T >= get_current_time() and \
-            ((self._end_t == None) or (self._end_t >= get_current_time())):
+        if SIMULATION_END_T >= self.corrected_time and \
+            ((self._end_t == None) or (self._end_t >= self.corrected_time)):
             _schedule_output_rate_encoder(
                 self._rate_encoder,
-                start_t=get_current_time() + self._rate_encoder.update_period,
+                start_t=self.corrected_time + self._rate_encoder.update_period,
                 end_t=self._end_t)
         yield sim.hold, self, 0
 
@@ -148,6 +159,13 @@ def schedule_output_rate_calculation(population, start_t=None, duration=None):
 
 
 def _schedule_output_rate_encoder(rate_enc, start_t, end_t):
-    rc = RateCalculation(rate_enc, end_t)
+    # workaround of the workaround of 
+    # neuralensemble.org/trac/PyNN/ticket/200:
+    rc = None
+    if start_t == 0:
+        rc = RateCalculation(rate_enc, end_t, start_t)
+        start_t += PYNN_TIME_STEP
+    else:
+        rc = RateCalculation(rate_enc, end_t)
     rc.start(at=start_t)
 

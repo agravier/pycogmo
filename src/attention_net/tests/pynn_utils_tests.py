@@ -54,6 +54,10 @@ def setup_weights():
     Tns.w2 = Weights(Tns.w2_array)
 
 
+def reset_pynn():
+    pynnn.reset()
+
+
 def setup_pynn_populations():
     pynnn.setup()
     Tns.p1 = pynnn.Population(64, pynnn.IF_curr_alpha,
@@ -97,13 +101,14 @@ def setup_rectinilinear_ouput_rate_encoders():
                                              Tns.rore2_update_p,
                                              Tns.rore2_win_width)
 
-# def setup_mock_dcsource():
-#     Tns.dcsource_patch = patch.object(pynnn., "__int__")
-#     Tns.dcsource_patch.start()
 
-# def teardown_mock_dcsource():
-#     Tns.dcsource_patch.stop()
-#     Tns.dcsource_patch = None
+def setup_registered_rectinilinear_ouput_rate_encoders():
+    setup_rectinilinear_ouput_rate_encoders()
+    import common.pynn_utils
+    common.pynn_utils.POP_ADAPT_DICT[(Tns.p1,
+        common.pynn_utils.RectilinearOutputRateEncoder)] = Tns.rore1
+    common.pynn_utils.POP_ADAPT_DICT[(Tns.p2,
+        common.pynn_utils.RectilinearOutputRateEncoder)] = Tns.rore2
 
 
 def test_InvalidFileFormatError():

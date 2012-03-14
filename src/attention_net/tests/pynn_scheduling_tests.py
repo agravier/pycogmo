@@ -12,7 +12,8 @@ from scheduling.pynn_scheduling import _schedule_output_rate_encoder
 
 from tests.pynn_utils_tests import Tns, setup_weights, \
     setup_pynn_populations, setup_rectinilearinputlayers, \
-    setup_rectinilinear_ouput_rate_encoders
+    setup_rectinilinear_ouput_rate_encoders, setup_mock_pynn_population,\
+    setup_registered_rectinilinear_ouput_rate_encoders
 
 
 FULL_BINARY_CHECKER = [[1, 0, 1, 0, 1, 0, 1, 0],
@@ -131,7 +132,7 @@ def setup_samples_layers_sim():
     setup_input_samples()
     setup_clean_simpy()
 
-
+sim.Globals.allEventTimes()
 @with_setup(mock_input_layer_apply_input_setup,
             mock_input_layer_apply_input_teardown)
 @with_setup(setup_samples_layers_sim)
@@ -161,21 +162,55 @@ def test_rate_calculation_process_init():
 
 
 @with_setup(setup_rectinilinear_ouput_rate_encoders)
+def test_rate_calculation_process_corrected_time():
+    setup_clean_simpy()
+    pynnn.reset()
+    assert sim.now() + 0. == pynnn.get_current_time() + 0.
+    import scheduling.pynn_scheduling
+    scheduling.pynn_scheduling.SIMULATION_END_T = 100
+    rc1 = RateCalculation(Tns.rore1, end_t=None, correct_event_t=2)
+    rc2 = RateCalculation(Tns.rore2, end_t=None, correct_event_t=None)
+    assert rc1.corrected_time == 2
+    assert rc2.corrected_time == 0
+    run_simulation(1)
+    assert rc1.corrected_time == 2
+    run_simulation(2)
+    assert rc1.corrected_time == 2
+
+
+@with_setup(setup_rectinilinear_ouput_rate_encoders)
 def test_rate_calculation_actions():
     setup_clean_simpy()
     pynnn.reset()
     assert sim.now() + 0. == pynnn.get_current_time() + 0.
     import scheduling.pynn_scheduling
+    scheduling.pynn_scheduling.SIMULATION_END_T = 100
     rc1 = RateCalculation(Tns.rore1)
     Tns.rore1.update_rates = Mock()
     rc2 = RateCalculation(Tns.rore2, end_t=11)
     Tns.rore2.update_rates = Mock()
-    scheduling.pynn_scheduling.SIMULATION_END_T = 100
     rc1.start(at=0)
     rc2.start(at=99)
     run_simulation()
     assert Tns.rore1.update_rates.call_count == 100 / Tns.rore1_update_p + 2
     assert Tns.rore2.update_rates.call_count == 1
+
+
+def test_schedule_output_rate_calculation():
+    import scheduling.pynn_scheduling
+    setup_clean_simpy()
+    pynnn.reset()
+    setup_registered_rectinilinear_ouput_rate_encoders()
+    Tns.p1.record(to_file=False)
+    Tns.p2.record(to_file=False)
+    assert sim.now() + 0. == pynnn.get_current_time() + 0.
+    scheduling.pynn_scheduling.SIMULATION_END_T = 200
+    schedule_output_rate_calculation(Tns.p1)
+    schedule_output_rate_calculation(Tns.p2, start_t=8, duration=100)
+    assert sim.Globals.allEventTimes() == [PYNN_TIME_STEP, 8]
+    run_simulation(11)
+    assert sim.Globals.allEventTimes() == \
+        [Tns.rore1_update_p, 8 + Tns.rore2_update_p]
 
 
 def test__schedule_output_rate_encoder():
