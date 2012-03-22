@@ -11,15 +11,17 @@ from scheduling.nettraining import *
 # numpy.testing.utils.assert_almost_equal is more useful for arrays than the
 # nose.tools version:
 from numpy.testing.utils import assert_almost_equal
+from tests.pynn_utils_tests import setup_pynn_populations,\
+    setup_registered_rectinilinear_ouput_rate_encoders, Tns
+from common.pynn_utils import enable_recording, InputSample
+from tests.pynn_scheduling_tests import setup_clean_simpy
+from scheduling.pynn_scheduling import get_current_time, configure_scheduling
+import scheduling
 
 DUMMY_LOGGER = logging.getLogger("testLogger")
 DUMMY_LOGGER.addHandler(NullHandler())
 
-# TODO Check for runaway positive feedback of SOM units
-
-
-class Tns:
-    pass
+# TODO: Check for runaway positive feedback of SOM units
 
 
 def setup_data():
@@ -38,6 +40,12 @@ def setup_data():
     Tns.s_out_1 = 0.9
     Tns.s_out_2 = 0
     Tns.s_out_3 = -1
+
+
+def setup_2_layers_ff_net():
+    configure_scheduling()
+    setup_registered_rectinilinear_ouput_rate_encoders()
+    enable_recording(Tns.p1, Tns.p2)
 
 
 @with_setup(setup_data)
@@ -107,3 +115,13 @@ def test_conditional_pca_learning_vector():
         Tns.v_w_3, 3.5)) == 5
     assert (conditional_pca_learning(Tns.v_in_3, Tns.s_out_3, Tns.v_w_3, 3.5) \
             == [1.] * 5).all()
+
+
+@with_setup(setup_2_layers_ff_net)
+def test_kwta_presentation():
+    """Tests one kwta presentation to half of the units,"""
+    s = InputSample(8, 8, [[1] * 8] * 4 + [[0] * 8] * 4)
+    print get_current_time(), scheduling.pynn_scheduling.SIMULATION_END_T
+    kwta_presentation(Tns.p1, s, 100)
+    print get_current_time(), scheduling.pynn_scheduling.SIMULATION_END_T
+    assert get_current_time() == 100

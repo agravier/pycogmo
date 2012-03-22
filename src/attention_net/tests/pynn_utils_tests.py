@@ -9,6 +9,8 @@ from nose import with_setup
 from nose.tools import eq_, raises, timed, nottest
 import os
 import pyNN.nest as pynnn
+
+import common.pynn_utils
 from common.pynn_utils import *
 from common.utils import splice
 
@@ -104,7 +106,6 @@ def setup_rectinilinear_ouput_rate_encoders():
 
 def setup_registered_rectinilinear_ouput_rate_encoders():
     setup_rectinilinear_ouput_rate_encoders()
-    import common.pynn_utils
     common.pynn_utils.POP_ADAPT_DICT[(Tns.p1,
         common.pynn_utils.RectilinearOutputRateEncoder)] = Tns.rore1
     common.pynn_utils.POP_ADAPT_DICT[(Tns.p2,
@@ -558,10 +559,8 @@ def test_rectilinear_ouput_rate_encoder_update_rates_and_get_rates():
     rore = RectilinearOutputRateEncoder(Tns.p_mock, 8, 8,
                                         Tns.rore1_update_p,
                                         Tns.rore1_win_width)
-    rore.update_rates()
+    rore.update_rates(10)
     Tns.count_mock.assert_called()
-    print rore.get_rates()
-    print rore.unit_adapters_mat
     for r in splice(rore.get_rates()):
         assert r == 3.0
 
@@ -609,7 +608,7 @@ def test_get_input_layer():
 
 
 @with_setup(setup_pynn_populations)
-def test_rate_encoder():
+def test_get_rate_encoder():
     re = get_rate_encoder(Tns.p1)
     assert get_rate_encoder(Tns.p1) == re
     assert get_rate_encoder(Tns.p2) != re

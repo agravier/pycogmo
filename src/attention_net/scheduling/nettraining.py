@@ -66,7 +66,7 @@ def kwta_epoch(population, samples, duration):
 
 
 def kwta_presentation(population, sample, duration):
-    schedule_input_presentation(population, sample, duration)
-    schedule_output_rate_calculation(population, duration)
+    schedule_input_presentation(population, sample, None, duration)
+    schedule_output_rate_calculation(population, None, duration)
     run_simulation()
     

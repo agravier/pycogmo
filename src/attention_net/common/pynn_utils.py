@@ -12,7 +12,6 @@ import math
 import numpy
 from PIL import Image
 import pyNN.nest as pynnn
-import SimPy.Simulation as sim
 import types
 
 from utils import LOGGER, is_square
@@ -397,9 +396,10 @@ class RectilinearOutputRateEncoder(RectilinearLayerAdapter):
     # an additional circular list of updates timestamps for testing.
 
     # We assume that the necessary recorders have been set up.
-    def update_rates(self):
+    def update_rates(self, t_now):
+        """t_now is the timestamp for the current rates being recorded."""
         self.advance_idx()
-        self.update_history[self.idx] = sim.now()
+        self.update_history[self.idx] = t_now
         rec = self.pynn_population.get_spike_counts();
         for x in xrange(self._dim1):
             for y in xrange(self._dim2):
@@ -460,6 +460,8 @@ get_rate_encoder.__doc__ = ("Provides a unique rectilinear output rate "
                             "encoder for the given population.")
 
 
-def get_current_time():
-    return sim.now()
+def enable_recording(*p):
+    """Turns on spike recorders for all populations in parameter"""
+    for pop in p:
+        pop.record(to_file=False)
 

@@ -5,6 +5,7 @@ from nose import with_setup
 from nose.tools import eq_, raises, timed, nottest
 import SimPy.Simulation as sim
 
+import scheduling.pynn_scheduling
 from common.pynn_utils import InputSample, RectilinearInputLayer, \
     InvalidMatrixShapeError
 from scheduling.pynn_scheduling import *
@@ -40,8 +41,7 @@ class TestProcess(sim.Process):
 
 
 def setup_clean_simpy():
-    global SIMULATION_END_T
-    SIMULATION_END_T = -1
+    scheduling.pynn_scheduling.SIMULATION_END_T = -1
     configure_scheduling()
 
 
@@ -128,9 +128,10 @@ def mock_input_layer_apply_input_teardown():
 
 
 def setup_samples_layers_sim():
+    setup_clean_simpy()
     setup_rectinilearinputlayers()
     setup_input_samples()
-    setup_clean_simpy()
+
 
 sim.Globals.allEventTimes()
 @with_setup(mock_input_layer_apply_input_setup,
@@ -145,9 +146,13 @@ def test_input_presentation_actions():
 
 @with_setup(setup_samples_layers_sim)
 def test_schedule_input_presentation():
+    print sim.peek()
+    print sim.now()
     schedule_input_presentation(Tns.p1, Tns.s1, None, 10)
+    print sim.peek()
+    print sim.now()
     assert sim.peek() == sim.now()
-    schedule_input_presentation(Tns.p1, Tns.s1, start_t = 20, duration = 10)
+    schedule_input_presentation(Tns.p1, Tns.s1, start_t=20, duration=10)
     assert sim.Globals.allEventTimes() == [0, 20]
     from scheduling.pynn_scheduling import SIMULATION_END_T as end_t
     assert end_t == 30
@@ -164,9 +169,7 @@ def test_rate_calculation_process_init():
 @with_setup(setup_rectinilinear_ouput_rate_encoders)
 def test_rate_calculation_process_corrected_time():
     setup_clean_simpy()
-    pynnn.reset()
     assert sim.now() + 0. == pynnn.get_current_time() + 0.
-    import scheduling.pynn_scheduling
     scheduling.pynn_scheduling.SIMULATION_END_T = 100
     rc1 = RateCalculation(Tns.rore1, end_t=None, correct_event_t=2)
     rc2 = RateCalculation(Tns.rore2, end_t=None, correct_event_t=None)

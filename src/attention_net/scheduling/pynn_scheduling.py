@@ -5,8 +5,7 @@
 import pyNN.nest as pynnn
 import SimPy.Simulation as sim
 from common.pynn_utils import get_input_layer, get_rate_encoder, \
-    InputSample, RectilinearInputLayer, InvalidMatrixShapeError, \
-    get_current_time
+    InputSample, RectilinearInputLayer, InvalidMatrixShapeError
 from common.utils import LOGGER, optimal_rounding
 
 SIMULATION_END_T = 0
@@ -20,9 +19,15 @@ class DummyProcess(sim.Process):
         yield sim.hold, self, 0
 
 
+def get_current_time():
+    return sim.now()
+
+
 def configure_scheduling():
+    global SIMULATION_END_T
     sim.initialize()
     pynnn.setup()
+    SIMULATION_END_T = 0
 
 
 def run_simulation(end_time=None):
@@ -90,6 +95,7 @@ def schedule_input_presentation(population,
     input_layer = get_input_layer(population)
     if start_t == None:
         start_t = SIMULATION_END_T
+    print "start_t is", start_t
     p = InputPresentation(input_layer, input_sample, duration)
     p.start(at=start_t)
     if start_t + duration > SIMULATION_END_T:
@@ -133,7 +139,7 @@ class RateCalculation(sim.Process):
     def ACTIONS(self):
         global SIMULATION_END_T
         LOGGER.debug("%s starting", self.name)
-        self._rate_encoder.update_rates()
+        self._rate_encoder.update_rates(get_current_time())
         if SIMULATION_END_T >= self.corrected_time and \
             ((self._end_t == None) or (self._end_t >= self.corrected_time)):
             _schedule_output_rate_encoder(
@@ -168,4 +174,6 @@ def _schedule_output_rate_encoder(rate_enc, start_t, end_t):
     else:
         rc = RateCalculation(rate_enc, end_t)
     rc.start(at=start_t)
+    print "events times", sim.Globals.allEventTimes()
+
 
