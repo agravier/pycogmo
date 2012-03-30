@@ -13,6 +13,7 @@ import pyNN.nest as pynnn
 import common.pynn_utils
 from common.pynn_utils import *
 from common.utils import splice
+from numpy.ma.testutils import assert_almost_equal
 
 
 class Tns(object):  # TestNameSpace
@@ -529,15 +530,25 @@ def test_rectilinear_ouput_rate_encoder__init():
 
 
 @with_setup(setup_rectinilinear_ouput_rate_encoders)
-def test_rectilinear_ouput_rate_encoder_make_weights_vec():
-    wv31 = Tns.rore1.make_weights_vec(31)
-    wv1 = RectilinearOutputRateEncoder.make_weights_vec(0)
-    wv2 = RectilinearOutputRateEncoder.make_weights_vec(1)
-    wv4 = RectilinearOutputRateEncoder.make_weights_vec(3)
-    assert (wv31 == RectilinearOutputRateEncoder.make_weights_vec(31)).all()
-    assert (wv1 == numpy.array([])).all()
-    assert (wv2 == numpy.array([1.0])).all()
-    assert (wv4 == numpy.array([1. / 3, 2. / 3, 1.0])).all()
+def test_rectilinear_ouput_rate_encoder_extend_capacity():
+    assert False
+
+
+@with_setup(setup_rectinilinear_ouput_rate_encoders)
+def test_rectilinear_ouput_rate_encoder_make_hist_weights_vec():
+    wv0 = Tns.rore1.make_hist_weights_vec([200, -50, 0, 50, 100, 150], 200, 0)
+    wv0_ans = [0., 0.0625, 0.1875, 0.3125, 0.4375]
+    wv1 = RectilinearOutputRateEncoder.make_hist_weights_vec(
+        [190, 200, 0, 120, 140, 160], 110, 1)
+    wv2 = RectilinearOutputRateEncoder.make_hist_weights_vec(
+        [190, 200, 95, 120, 140, 160], 40, 1)
+    assert (wv0 == RectilinearOutputRateEncoder.make_hist_weights_vec(
+        [200, -50, 0, 50, 100, 150], 200, 0)).all()
+    assert (wv0_ans == wv0).all()
+    assert sum(wv0) == 1.
+    assert sum(wv1) == 1.
+    assert sum(wv2) == 1.
+    assert (wv2[0:3] == numpy.zeros(3)).all()
 
 
 @with_setup(setup_rectinilinear_ouput_rate_encoders)
@@ -562,19 +573,28 @@ def test_rectilinear_ouput_rate_encoder_update_rates_and_get_rates():
     rore.update_rates(10)
     Tns.count_mock.assert_called()
     for r in splice(rore.get_rates()):
-        assert r == 3.0
+        assert r == 3.0 * RectilinearOutputRateEncoder.make_hist_weights_vec(
+            rore.update_history, rore.window_width, 0)[-1]
+
+
+@with_setup(setup_rectinilinear_ouput_rate_encoders)
+@with_setup(setup_mock_pynn_population)
+def test_rectilinear_ouput_rate_encoder_update_rates_with_irregular_period():
+    assert False
 
 
 @with_setup(setup_mock_pynn_population)
 def test_rectilinear_ouput_rate_encoder_f_rate():
-    rore = RectilinearOutputRateEncoder(Tns.p_mock, 8, 8, 2, 8)
-    np_a = numpy.array([4, 5, 10, 0, 0])
-    result_shift_3 = 5 * 1. + 1 * 3. / 4. + 4 * 2. / 4. + 0
+    rore = RectilinearOutputRateEncoder(Tns.p_mock, 8, 8, 2, 200)
+    np_a = numpy.array([4, 5, 10, 0, 0, 0])
+    result_shift_3 = numpy.array([0., 0.0625, 0.1875, 0.3125, 0.4375]).dot(
+        [0, 0, 4, 1, 5])
     rore.advance_idx()
     rore.advance_idx()
     rore.advance_idx()
+    rore.update_history = [100, 150, 200, -50, 0, 50]
     rates = rore.f_rate(np_a)
-    assert rates == result_shift_3
+    assert_almost_equal(rates, result_shift_3)
 
 
 @with_setup(setup_mock_pynn_population)

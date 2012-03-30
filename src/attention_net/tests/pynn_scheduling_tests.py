@@ -182,11 +182,15 @@ def test_rate_calculation_process_corrected_time():
 
 
 @with_setup(setup_rectinilinear_ouput_rate_encoders)
+def test_rate_calculation_process_last_schedulable_time():
+    assert False
+
+
+@with_setup(setup_rectinilinear_ouput_rate_encoders)
 def test_rate_calculation_actions():
     setup_clean_simpy()
     pynnn.reset()
     assert sim.now() + 0. == pynnn.get_current_time() + 0.
-    import scheduling.pynn_scheduling
     scheduling.pynn_scheduling.SIMULATION_END_T = 100
     rc1 = RateCalculation(Tns.rore1)
     Tns.rore1.update_rates = Mock()
@@ -200,7 +204,6 @@ def test_rate_calculation_actions():
 
 
 def test_schedule_output_rate_calculation():
-    import scheduling.pynn_scheduling
     setup_clean_simpy()
     pynnn.reset()
     setup_registered_rectinilinear_ouput_rate_encoders()

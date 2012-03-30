@@ -348,7 +348,8 @@ class RectilinearInputLayer(RectilinearLayerAdapter):
 class RectilinearOutputRateEncoder(RectilinearLayerAdapter):
     """Keeps track of the weighted averages on a sliding window of the
     output rates of all units in the topographically rectilinear
-    population of units."""
+    population of units. The update period and can be overridden at update
+    time."""
     # Default width of the sliding window in simulator time units. The
     # weight of past rates in activity calculation decreases linearly
     # so that it is 0 when window_width old, and 1 for sim.now()
@@ -370,22 +371,63 @@ class RectilinearOutputRateEncoder(RectilinearLayerAdapter):
             for y in xrange(self._dim2):
                 self.unit_adapters_mat[x][y][0] = \
                     numpy.zeros(self.hist_len, dtype=numpy.int)
-        self._weights_vec = self.make_weights_vec(self.hist_len - 1)
         self.idx = -1
-        self.update_history = numpy.zeros(self.hist_len, dtype=numpy.float)
+        self.update_history = None # initialized at first update
+
+    def extend_capacity(self, idx):
+        """Adds one cell to all logging structures at position idx, and 
+        increments self.hist_len."""
+        for x in xrange(self._dim1):
+            for y in xrange(self._dim2):
+                self.unit_adapters_mat[x][y][0] = numpy.concatenate(
+                    (self.unit_adapters_mat[x][y][0][:idx],
+                     [-1],
+                     self.unit_adapters_mat[x][y][0][idx:]))
+        self.update_history = numpy.concatenate(
+            (self.update_history[:idx], [-1], self.update_history[idx:]))
+        self.hist_len += 1
 
     @staticmethod
-    def make_weights_vec(length):
-        """Returns an ndarray of length linearly spaced floats
-        between 1 inclusive and 1/length inclusive."""
-        return numpy.linspace(0, 1, num=length + 1)[1:]
+    def make_hist_weights_vec(update_history, window_width, idx):
+        """Parameters are the update times array, the rate averaging window 
+        width, and the current time index in the update times array. 
+        Returns the ndarray of weights by which to multiply the rates 
+        history vector to calculate the weighted recent activity of the unit.
+        The weight for the oldest rate is the head of the array. The sum of 
+        weights is 1 if the update_history array covers at least the duration
+        of window_width."""
+        update_hist = numpy.append(update_history[idx+1:],
+                                   update_history[:idx+1])
+        update_dt = numpy.diff(update_hist)
+        cumsum_dt = update_dt[::-1].cumsum()[::-1] # reversed cumulative sum
+        last_t = update_hist[-1]
+        cutoff_t = last_t - window_width
+        l_h = 1 - cumsum_dt / (window_width * 1.)
+        r_h = 1 - (numpy.append(cumsum_dt[1:], [0]) / (window_width * 1.))
+        areas = numpy.fromiter(
+            itertools.imap(lambda i, x:
+                # in window -> area; out -> 0; border -> triangle
+                (l_h[i] + r_h[i]) * update_dt[i] if x <= window_width 
+                    else max(abs(r_h[i]) * (update_hist[i + 1] - cutoff_t), 0),
+                itertools.count(), cumsum_dt),
+            numpy.float)
+        return areas / window_width
     
     def advance_idx(self):
-        self.idx = (self.idx + 1) % self.hist_len
+        self.idx = self.next_idx
+
+    @property
+    def next_idx(self):
+        return self.idx_offset(1)
 
     @property
     def previous_idx(self):
-        return (self.idx - 1) % self.hist_len
+        return self.idx_offset(-1)
+
+    def idx_offset(self, offset):
+        """Returns the value of the index with the (positive or negative)
+        offset added."""
+        return (self.idx + offset) % self.hist_len
     
     # The data structure for the rate history of one unit is a
     # circular list of rates, and an integer index (self.idx, common
@@ -398,6 +440,27 @@ class RectilinearOutputRateEncoder(RectilinearLayerAdapter):
     # We assume that the necessary recorders have been set up.
     def update_rates(self, t_now):
         """t_now is the timestamp for the current rates being recorded."""
+        if self.idx != -1:
+            # Not the first update, so the state is consistent.
+            if t_now - self.update_history[self.idx] < self.update_period:
+                # Premature update -> we may need to increase the arrays length
+                # to have enough place to cover the full window width.
+                # The total time covered by the rate log after idx increment
+                # will be: 
+                total_covered_dt = t_now - \
+                    self.update_history[self.next_idx]
+                if total_covered_dt < self.window_width:
+                    # The arrays are insufficient to cover the whole window
+                    # width. We need to extend all arrays by one (add one entry
+                    # to all logging structures).
+                    self.extend_capacity(self.next_idx)
+        else:
+            # First update:
+            # Initialize the update times log to past values to have a 
+            # consistent state without having to wait for the whole update
+            # window to have been crawled once. 
+            self.update_history = t_now - self.update_period * \
+                numpy.array([0] + range(self.hist_len-1, 0, -1))
         self.advance_idx()
         self.update_history[self.idx] = t_now
         rec = self.pynn_population.get_spike_counts();
@@ -407,7 +470,7 @@ class RectilinearOutputRateEncoder(RectilinearLayerAdapter):
                     rec.get(self.pynn_population[x*self._dim2+y])
 
     def get_rates(self):
-        r = numpy.zeros((self._dim1, self._dim2), dtype=numpy.int)
+        r = numpy.zeros((self._dim1, self._dim2), dtype=numpy.float)
         for x in xrange(self._dim1):
             for y in xrange(self._dim2):
                 r[x][y] = self.f_rate(self.unit_adapters_mat[x][y][0])
@@ -417,7 +480,9 @@ class RectilinearOutputRateEncoder(RectilinearLayerAdapter):
         """Returns the weighted average of the rates recorded in the
         differences of the array np_a."""
         rates = numpy.diff(numpy.append(np_a[self.idx+1:], np_a[:self.idx+1]))
-        return self._weights_vec.dot(rates)
+        return self.make_hist_weights_vec(self.update_history, 
+                                          self.window_width, 
+                                          self.idx).dot(rates)
 
 
 # WARNING / TODO: The following function reveals a design flaw. PyNN is insufficient and its networks should be encapsulated along with more metadata.

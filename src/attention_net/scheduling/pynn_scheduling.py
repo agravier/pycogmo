@@ -113,10 +113,12 @@ class RateCalculation(sim.Process):
     # SIMULATION_END_T.
     # Hence, RateCalculation:
     #  - does not modify SIMULATION_END_T
-    #  - only installs its next call if SIMULATION_END_T >= sim.now().
-    # The two conditions above are sufficient to ensure that exactly one last
+    #  - only installs its next call if SIMULATION_END_T > sim.now()
+    #  - installs its last call exactly at SIMULATION_END_T if no earlier 
+    #    end_time was given.
+    # The three conditions above are sufficient to ensure that exactly one last
     # call to each output rate encoder is performed at the end of the
-    # simulation. 
+    # simulation.
     def __init__(self, rate_encoder, end_t=None, correct_event_t=None):
         """expects a RectilinearOutputRateEncoder as parameter. end_t is the 
         time of the last recording to be scheduled. correct_event_t is a 
@@ -136,16 +138,23 @@ class RateCalculation(sim.Process):
             return get_current_time()
         return self._correct_event_t
 
+    @property
+    def last_schedulable_time(self):
+        if self._end_t == None:
+            return SIMULATION_END_T
+        return min(self._end_t, SIMULATION_END_T)
+
     def ACTIONS(self):
         global SIMULATION_END_T
         LOGGER.debug("%s starting", self.name)
         self._rate_encoder.update_rates(get_current_time())
-        if SIMULATION_END_T >= self.corrected_time and \
-            ((self._end_t == None) or (self._end_t >= self.corrected_time)):
-            _schedule_output_rate_encoder(
-                self._rate_encoder,
-                start_t=self.corrected_time + self._rate_encoder.update_period,
-                end_t=self._end_t)
+        if self.last_schedulable_time > self.corrected_time:
+            # At least one more event has to be scheduled.
+            next_period = self.corrected_time + self._rate_encoder.update_period
+            next_time = min(next_period, self.last_schedulable_time)
+            _schedule_output_rate_encoder(self._rate_encoder,
+                                          start_t=next_time,
+                                          end_t=self._end_t)
         yield sim.hold, self, 0
 
 
@@ -169,7 +178,7 @@ def _schedule_output_rate_encoder(rate_enc, start_t, end_t):
     # neuralensemble.org/trac/PyNN/ticket/200:
     rc = None
     if start_t == 0:
-        rc = RateCalculation(rate_enc, end_t, start_t)
+        rc = RateCalculation(rate_enc, end_t, correct_event_t=start_t)
         start_t += PYNN_TIME_STEP
     else:
         rc = RateCalculation(rate_enc, end_t)
