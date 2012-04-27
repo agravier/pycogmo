@@ -531,7 +531,22 @@ def test_rectilinear_ouput_rate_encoder__init():
 
 @with_setup(setup_rectinilinear_ouput_rate_encoders)
 def test_rectilinear_ouput_rate_encoder_extend_capacity():
-    assert False
+    Tns.rore1.pynn_population = MagicMock()
+    Tns.rore1.update_rates(1)
+    l1 = len(Tns.rore1.unit_adapters_mat[0][0][0])
+    l2 = Tns.rore1.window_width
+    l3 = len(Tns.rore1.update_history)
+    l4 = Tns.rore1.hist_len
+    Tns.rore1.extend_capacity(0)
+    assert l1 == len(Tns.rore1.unit_adapters_mat[0][0][0]) - 1
+    assert l2 == Tns.rore1.window_width
+    assert l3 == len(Tns.rore1.update_history) - 1
+    assert l4 == Tns.rore1.hist_len - 1
+    Tns.rore1.extend_capacity(Tns.rore1.hist_len-1)
+    assert l1 == len(Tns.rore1.unit_adapters_mat[0][0][0]) - 2
+    assert l2 == Tns.rore1.window_width
+    assert l3 == len(Tns.rore1.update_history) - 2
+    assert l4 == Tns.rore1.hist_len - 2
 
 
 @with_setup(setup_rectinilinear_ouput_rate_encoders)
@@ -568,32 +583,50 @@ def test_rectilinear_ouput_rate_encoder_advance_idx_and_previous_idx():
 @with_setup(setup_mock_pynn_population)
 def test_rectilinear_ouput_rate_encoder_update_rates_and_get_rates():
     rore = RectilinearOutputRateEncoder(Tns.p_mock, 8, 8,
-                                        Tns.rore1_update_p,
-                                        Tns.rore1_win_width)
-    rore.update_rates(10)
+                                        Tns.rore1_update_p,  # 22
+                                        Tns.rore1_win_width) # 200
+    Tns.a_counter = 0
+    def inc_by_3(*args):
+        Tns.a_counter += 1
+        return Tns.a_counter / 64 * 3
+    Tns.count_mock.get = inc_by_3
+    for i in range(Tns.rore1_win_width / Tns.rore1_update_p + 1):
+        rore.update_rates(i*22)
     Tns.count_mock.assert_called()
     for r in splice(rore.get_rates()):
-        assert r == 3.0 * RectilinearOutputRateEncoder.make_hist_weights_vec(
-            rore.update_history, rore.window_width, 0)[-1]
+        assert_almost_equal(r, 3.0 / 22, 4)
 
 
 @with_setup(setup_rectinilinear_ouput_rate_encoders)
 @with_setup(setup_mock_pynn_population)
 def test_rectilinear_ouput_rate_encoder_update_rates_with_irregular_period():
-    assert False
+    rore = RectilinearOutputRateEncoder(Tns.p_mock, 8, 8,
+                                        Tns.rore1_update_p,  # 22
+                                        Tns.rore1_win_width) # 200
+    Tns.a_counter = 0
+    def inc_by_3_or_6(*args):
+        cycle = Tns.a_counter / 64
+        Tns.a_counter += 1
+        return cycle / 2 * 6 + (cycle + 1) / 2 * 3
+    Tns.count_mock.get = inc_by_3_or_6
+    for i in range(2 * Tns.rore1_win_width / Tns.rore1_update_p + 1):
+        # 0 -> 0, 1 -> 11, 2 -> 33, 3 -> 44
+        rore.update_rates(i / 2 * 22 + (i + 1) / 2 * 11)
+    Tns.count_mock.assert_called()
+    for r in splice(rore.get_rates()):
+        assert_almost_equal(r, 9.0 / 33, 4)
 
 
 @with_setup(setup_mock_pynn_population)
 def test_rectilinear_ouput_rate_encoder_f_rate():
-    rore = RectilinearOutputRateEncoder(Tns.p_mock, 8, 8, 2, 200)
+    rore = RectilinearOutputRateEncoder(Tns.p_mock, 8, 8, 50, 200)
     np_a = numpy.array([4, 5, 10, 0, 0, 0])
     result_shift_3 = numpy.array([0., 0.0625, 0.1875, 0.3125, 0.4375]).dot(
-        [0, 0, 4, 1, 5])
+        [0, 0, 4/50., 1/50., 5/50.])
     rore.advance_idx()
     rore.advance_idx()
     rore.advance_idx()
-    rore.update_history = [100, 150, 200, -50, 0, 50]
-    rates = rore.f_rate(np_a)
+    rates = rore.f_rate(np_a, [100, 150, 200, -50, 0, 50])
     assert_almost_equal(rates, result_shift_3)
 
 

@@ -476,13 +476,18 @@ class RectilinearOutputRateEncoder(RectilinearLayerAdapter):
                 r[x][y] = self.f_rate(self.unit_adapters_mat[x][y][0])
         return r
 
-    def f_rate(self, np_a):
+    def f_rate(self, np_a, update_history=None):
         """Returns the weighted average of the rates recorded in the
         differences of the array np_a."""
+        if update_history == None:
+            update_history = self.update_history
+        update_hist = numpy.append(update_history[self.idx+1:],
+                                   update_history[:self.idx+1])
+        update_dt = numpy.diff(update_hist) * 1.
         rates = numpy.diff(numpy.append(np_a[self.idx+1:], np_a[:self.idx+1]))
-        return self.make_hist_weights_vec(self.update_history, 
+        return self.make_hist_weights_vec(update_history,
                                           self.window_width, 
-                                          self.idx).dot(rates)
+                                          self.idx).dot(rates / update_dt)
 
 
 # WARNING / TODO: The following function reveals a design flaw. PyNN is insufficient and its networks should be encapsulated along with more metadata.
