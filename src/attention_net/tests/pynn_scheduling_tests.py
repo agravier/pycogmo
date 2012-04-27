@@ -183,7 +183,13 @@ def test_rate_calculation_process_corrected_time():
 
 @with_setup(setup_rectinilinear_ouput_rate_encoders)
 def test_rate_calculation_process_last_schedulable_time():
-    assert False
+    scheduling.pynn_scheduling.SIMULATION_END_T = 234
+    rc1 = RateCalculation(Tns.rore1)
+    rc2 = RateCalculation(Tns.rore2, end_t=30)
+    rc3 = RateCalculation(Tns.rore2, end_t=300)
+    assert rc1.last_schedulable_time == scheduling.pynn_scheduling.SIMULATION_END_T
+    assert rc2.last_schedulable_time == 30
+    assert rc3.last_schedulable_time == scheduling.pynn_scheduling.SIMULATION_END_T
 
 
 @with_setup(setup_rectinilinear_ouput_rate_encoders)
