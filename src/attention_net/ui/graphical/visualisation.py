@@ -110,7 +110,7 @@ class VisualisableNetworkStructure(object):
         Unit to the given map that may
         need to be created for the occasion."""
         if unit not in self.units:
-            raise self.UnitNotFoundError()
+            raise UnitNotFoundError()
         if assign_map not in self.maps:
             self.maps[assign_map]=[]
         if assign_map not in self.maps_ids:
@@ -130,9 +130,9 @@ class VisualisableNetworkStructure(object):
         rcv_unit_id = int(rcv_unit_id)
         units_ids = set([u.unit_id for u in self.units])
         if snd_unit_id not in units_ids or rcv_unit_id not in units_ids:
-            raise self.UnitNotFoundError()
+            raise UnitNotFoundError()
         if strength > 1 or strength < -1:
-            raise self.WeightOutOfRangeError()
+            raise WeightOutOfRangeError()
         self.units_conn.append((snd_unit_id, rcv_unit_id, strength))
         pass
 
@@ -367,6 +367,7 @@ def visualisation_process_f(child_conn, logger):
     log_tick("background set")
     timer_id = setup_timer(I_REN, child_conn)
     I_REN.Start()
+
 
 # set up a vtk pipeline
 def setup_visualisation():

@@ -1,6 +1,7 @@
 #!/usr/bin/env python2
 
 import datetime
+import itertools
 import logging
 import multiprocessing
 import os
@@ -18,28 +19,46 @@ def ensure_dir(f):
     if not os.path.exists(d):
         os.makedirs(d)
 
-def configure_loggers():
-    LOGGER.setLevel(SUBDEBUG)
-    debug_handler = logging.StreamHandler()
-    debug_handler.setLevel(SUBDEBUG)
+def make_logfile_name():
+    LOG_DIR + "/" + datetime.datetime.now().strftime("%Y.%m.%d-%H.%M.%S.%f") + ".log"
+
+def configure_loggers(debug_handler, file_handler, logger=LOGGER):
+    logger.setLevel(SUBDEBUG)
     debug_formatter = logging.Formatter(
         fmt='%(asctime)s - %(levelname)s - %(message)s',
         datefmt='%m-%d %H:%M')
     debug_handler.setFormatter(debug_formatter)
-    LOGGER.addHandler(debug_handler)
-    logfile = LOG_DIR + "/" + datetime.datetime.now().strftime("%Y.%m.%d-%H.%M.%S.%f") + ".log"
-    ensure_dir(logfile)
-    file_handler = logging.FileHandler(logfile)
-    file_handler.setLevel(SUBDEBUG)
+    logger.addHandler(debug_handler)
     file_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
     file_handler.setFormatter(file_formatter)
-    LOGGER.addHandler(file_handler)
+    logger.addHandler(file_handler)
     # Necessary to circumvent the non-configurable logger of pyNN
     logging.root.addHandler(file_handler)
        
 
-def log_tick(s):
+def log_tick(s, logger=LOGGER):
     now = datetime.datetime.now()
-    LOGGER.log(SUBDEBUG, "tick at time %s: %s", now, s)
-    for h in LOGGER.handlers:
+    logger.log(SUBDEBUG, "tick at time %s: %s", now, s)
+    for h in logger.handlers:
        h.flush()
+
+def optimal_rounding(timestep):
+    return len(str(timestep).split('.')[1])
+
+def splice(deep_list):
+    return list(itertools.chain.from_iterable(deep_list))
+
+def is_square(n):
+    try:
+        if n == 0 or n == 1:
+            return True
+        x = n // 2
+        seen = set([x])
+        while x * x != n:
+            x = (x + (n // x)) // 2
+            if x in seen:
+                 return False
+            seen.add(x)
+        return True
+    except ZeroDivisionError:
+        return False

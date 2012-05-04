@@ -11,7 +11,7 @@ import sys
 import time
 # -- own modules
 import common.utils as utils
-from common.utils import log_tick, LOGGER
+from common.utils import log_tick, LOGGER, make_logfile_name, ensure_dir
 import ui.graphical.visualisation as visualisation
 import ui.graphical.pynn_to_visu as pynn_to_visu
 
@@ -53,7 +53,13 @@ def ipc_test(parent_conn, child_conn):
 
 def main():
     ## Uninteresting setup, start up the visu process,...
-    utils.configure_loggers()
+    logfile = make_logfile_name()
+    ensure_dir(logfile)
+    f_h = logging.FileHandler(logfile)
+    f_h.setLevel(SUBDEBUG)
+    d_h = logging.StreamHandler()
+    d_h.setLevel(INFO)
+    utils.configure_loggers(debug_handler=d_h, file_handler=f_h)
     parent_conn, child_conn = multiprocessing.Pipe()
     p = multiprocessing.Process(
         target=visualisation.visualisation_process_f,

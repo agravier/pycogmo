@@ -2,7 +2,7 @@
 
 import itertools
 import logging
-from logging import NullHandler 
+from logging import NullHandler
 from mock import Mock, patch
 from nose import with_setup
 from nose.tools import eq_, raises, timed
@@ -14,13 +14,16 @@ DUMMY_LOGGER.addHandler(NullHandler())
 A = None
 pynnn.setup()
 
+
 def setup_adapter():
     global A
     A = PynnToVisuAdapter(DUMMY_LOGGER)
 
-# holder class ("namespace") fot the test variables
+
+# holder class ("namespace") for the test variables
 class Tns(object):
     pass
+
 
 def setup_and_fill_adapter():
     setup_adapter()
@@ -28,19 +31,20 @@ def setup_and_fill_adapter():
     Tns.pynn_pop1 = pynnn.Population(Tns.pop_size, pynnn.IF_cond_alpha)
     Tns.ids1 = [int(u) for u in Tns.pynn_pop1.all()]
     Tns.pynn_pop2 = pynnn.Population(Tns.pop_size, pynnn.IF_cond_alpha,
-                                 structure = pynnn.space.Grid3D())
+                                 structure=pynnn.space.Grid3D())
     Tns.ids2 = [int(u) for u in Tns.pynn_pop2.all()]
     A.add_pynn_population(Tns.pynn_pop1)
     Tns.pop2_alias = "testmap"
-    A.add_pynn_population(Tns.pynn_pop2, alias = Tns.pop2_alias)
+    A.add_pynn_population(Tns.pynn_pop2, alias=Tns.pop2_alias)
     Tns.pynn_proj1 = pynnn.Projection(Tns.pynn_pop1, Tns.pynn_pop2,
                                   pynnn.OneToOneConnector())
     Tns.pynn_proj2 = pynnn.Projection(Tns.pynn_pop2, Tns.pynn_pop1,
                                   pynnn.AllToAllConnector())
     A.add_pynn_projection(Tns.pynn_pop1, Tns.pynn_pop2,
                           Tns.pynn_proj1.connection_manager)
-    A.add_pynn_projection(Tns.pynn_pop2, Tns.pynn_pop1, 
+    A.add_pynn_projection(Tns.pynn_pop2, Tns.pynn_pop1,
                           Tns.pynn_proj2.connection_manager)
+
 
 @with_setup(setup_adapter)
 def test_adapter_locked_states():
@@ -48,8 +52,7 @@ def test_adapter_locked_states():
     assert A.check_open()
     A.commit_structure()
     assert not A.check_open()
-    #A.reopen()
-    #assert A.check_open()
+
 
 @with_setup(setup_adapter)
 def test_adapter_methods_call_check_open():
@@ -75,17 +78,21 @@ def test_adapter_methods_call_check_open():
             m[0].__name__ + " does not call check_open."
         A.check_open.reset_mock()
 
+
 PATCH = None
+
 
 def setup_mock_unit_unit_id():
     global PATCH
     PATCH = patch.object(pynnn.simulator.ID, "__int__")
     PATCH.start()
 
+
 def teardown_mock_unit_id():
     global PATCH
     PATCH.stop()
     PATCH = None
+
 
 @with_setup(setup_mock_unit_unit_id, teardown_mock_unit_id)
 @with_setup(setup_adapter)
@@ -106,6 +113,7 @@ def test_add_pynn_population_processes_all_units():
     for u in pynn_pop2.all():
         assert u.__int__.call_count == pop_size, "units missed in the 3D case"
 
+
 @with_setup(setup_and_fill_adapter)
 def test_add_pynn_population_sets_up_labels_and_aliases():
     pynn_pop3 =  pynnn.Population(1, pynnn.IF_cond_alpha)
@@ -114,9 +122,11 @@ def test_add_pynn_population_sets_up_labels_and_aliases():
     assert A.aliases[Tns.pynn_pop2.label] == Tns.pop2_alias
     assert A.aliases[pynn_pop3.label] == pynn_pop3.label
 
+
 @with_setup(setup_adapter)
 def test_adapter_keeps_unit_count():
-    """Add_pynn_population and commit_structure result in consistent number of units."""
+    """Add_pynn_population and commit_structure result in consistent number of
+    units."""
     assert A.num_units == 0
     pop_size = 27
     pynn_pop1 = pynnn.Population(pop_size, pynnn.IF_cond_alpha)
@@ -126,6 +136,7 @@ def test_adapter_keeps_unit_count():
     A.add_pynn_population(pynn_pop2)
     A.commit_structure()
     assert A.num_units == pop_size * 2
+
 
 @with_setup(setup_and_fill_adapter)
 def test_add_pynn_projection_adds_all_connections():
@@ -137,18 +148,21 @@ def test_add_pynn_projection_adds_all_connections():
             assert out_it.next()[1] in Tns.ids2
             try:
                 out_it.next()
-                assert False, "There should only be one outbound connection from this unit."
+                assert False, ("There should only be one outbound connection"
+                               " from this unit.")
             except StopIteration:
                 pass
         elif c[0] in Tns.ids2:
             o_l = [o[1] for o in out_it]
             assert set(o_l) == set(Tns.ids1)
         else:
-            assert False, "Unit ID inexistent on the PyNN side." 
+            assert False, "Unit ID inexistent on the PyNN side."
+
 
 @with_setup(setup_and_fill_adapter)
 def test_commit_structure_results_in_complete_output_struct():
-    """Tests the completeness of the output structure's units and connections."""
+    """Tests the completeness of the output structure's units and
+    connections."""
     # TODO: compare A.output_struct and a hand-made version. only doable when
     # VisualisableNEtworkStructure is done and tested.
     A.commit_structure()

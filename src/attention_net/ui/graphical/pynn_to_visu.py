@@ -91,7 +91,7 @@ class PynnToVisuAdapter(object):
         """Records a projection from sending_population to
         receiving_population. The connection_manager parameter
         expects a pyNN.brian.simulator.ConnectionManager, it can be
-        obtrained by
+        obtained by
         pyNN.brian.simulator.Projection.connection_manager.
         """
         self.assert_open()

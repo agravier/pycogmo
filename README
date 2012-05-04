@@ -3,20 +3,35 @@ TODO: write about the idea, the roadmap, the existing files, make README .rst
 This is a Python 2 project meant to be run on Unix platforms. If you run windows, install Linux on a VM. Virtualbox works and is free.
 
 Non-python dependencies:
-- NEST (NEST Neural Simulator) + pyNEST
+- NEST (NEST Neural Simulator) + PyNEST
   OR
 - Brian (http://www.briansimulator.org)
 
 - VTK (The Visualization Toolkit) + Python 2 bindings
 
 Python pip-installable dependencies:
+- coverage
 - PyNN
+- SimPy
 - mock
 - nose
+- numpy
+((( - ctype, a dep of python-magic, needs to be installed like that (https://github.com/pypa/pip/issues/317):
+pip install --no-install ctypes
+cd <yourvirtualenv>/build/ctypes/source/libffi)
+chmod +x configure
+pip install ctypes
+)))
+- python-magic
+- PIL
 
 if using Brian:
-- scipy which requires a fortran compiler if you pip install it (On Arch, use gcc-fortran)
-- sympy
+- scipy which requires:
+ - a fortran compiler if you pip install it (On Arch, use gcc-fortran)
+ - the basic linear algebra subprograms library (blas on Arch)
+ - the Linear Algebra PACKage (lapack)
+- sympy, note that a bug in package numbering semantics may prevent you from pip installing it, in which case you should request for the exact latest version: pip install sympy==0.7.1
+- matplotlib
 
 For now, switching between simulators is done manually. For instance, switching from PyNN to Brian: grep -ilr 'pyNN.nest' *.py */*.py */*/*.py | xargs sed -i 's/pyNN.nest/pyNN.brian/g'
 

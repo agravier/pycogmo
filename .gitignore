@@ -1,3 +1,6 @@
 logfile
 logs
 *.pyc
+.project
+.pydevproject
+.settings
