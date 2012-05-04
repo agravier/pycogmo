@@ -7,6 +7,8 @@ from pyNN.utility import init_logging
 import cPickle as pickle
 import logging
 import multiprocessing # because threading will not bypass the GIL
+from logging import DEBUG, INFO, WARNING, ERROR, CRITICAL, FATAL
+from multiprocessing import SUBDEBUG, SUBWARNING
 import sys
 import time
 # -- own modules
@@ -96,9 +98,12 @@ def main():
                                             parameters=[1,0.1])
     prj1_2.randomizeWeights(weight_distr)
 
-    source = pynnn.NoisyCurrentSource(
-        mean=100, stdev=50, dt=SIMU_TIMESTEP, 
-        start=10.0, stop=SIMU_DURATION, rng=pynnn.NativeRNG(seed=100)) 
+    # This one is in NEST but not in Brian:
+    # source = pynnn.NoisyCurrentSource(
+    #     mean=100, stdev=50, dt=SIMU_TIMESTEP, 
+    #     start=10.0, stop=SIMU_DURATION, rng=pynnn.NativeRNG(seed=100)) 
+    source = pynnn.DCSource(
+        start=10.0, stop=SIMU_DURATION, amplitude=100) 
     source.inject_into(list(p1.sample(50).all()))
 
     p1.record(to_file=False)

@@ -20,7 +20,7 @@ def ensure_dir(f):
         os.makedirs(d)
 
 def make_logfile_name():
-    LOG_DIR + "/" + datetime.datetime.now().strftime("%Y.%m.%d-%H.%M.%S.%f") + ".log"
+    return LOG_DIR + "/" + datetime.datetime.now().strftime("%Y.%m.%d-%H.%M.%S.%f") + ".log"
 
 def configure_loggers(debug_handler, file_handler, logger=LOGGER):
     logger.setLevel(SUBDEBUG)
