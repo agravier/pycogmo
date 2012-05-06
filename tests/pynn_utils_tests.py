@@ -22,8 +22,8 @@ class Tns(object):  # TestNameSpace
 NAN = float("NaN")
 
 CWD = os.getcwd()
-BASE_DATA_TESTPATH = CWD[:CWD.rfind("/src")] + \
-    "/src/attention_net/tests/test_data/"
+BASE_DATA_TESTPATH = CWD[:CWD.rfind("/pycogmo")] + \
+    "/pycogmo/tests/test_data/"
 VALID_SAMPLE_INPUT_FILEPATHS = {
     "png"     : [BASE_DATA_TESTPATH + "bnw_checker_8x8_24bit.png",
                  BASE_DATA_TESTPATH + "bnw_checker_8x8_2bit.png", ],
