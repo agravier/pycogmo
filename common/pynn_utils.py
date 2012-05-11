@@ -335,6 +335,8 @@ class RectilinearInputLayer(RectilinearLayerAdapter):
         testing.""" 
         if max_namp == None:
             max_namp = self.input_scaling
+        # TODO: Common current source for cells what should get the
+        # exact same input
         for x in xrange(self._dim1):
             for y in xrange(self._dim2):
                 # Will the GC collect the electrodes? Does PyNN delete
@@ -343,6 +345,8 @@ class RectilinearInputLayer(RectilinearLayerAdapter):
                     dcsource_class(amplitude=max_namp * sample[x][y], 
                                    start=start_time, 
                                    stop=start_time+duration)
+                self.unit_adapters_mat[x][y][0].inject_into(
+                    [self.unit_adapters_mat[x][y][1]])
 
 
 class RectilinearOutputRateEncoder(RectilinearLayerAdapter):

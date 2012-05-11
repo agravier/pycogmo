@@ -10,10 +10,10 @@ from numpy import array as npa
 from scheduling.nettraining import *
 # numpy.testing.utils.assert_almost_equal is more useful for arrays than the
 # nose.tools version:
-from numpy.testing.utils import assert_almost_equal
+from numpy.testing.utils import assert_almost_equal, assert_array_less
 from tests.pynn_utils_tests import setup_pynn_populations,\
     setup_registered_rectinilinear_ouput_rate_encoders, Tns
-from common.pynn_utils import enable_recording, InputSample
+from common.pynn_utils import enable_recording, InputSample, get_rate_encoder
 from tests.pynn_scheduling_tests import setup_clean_simpy
 from scheduling.pynn_scheduling import get_current_time, configure_scheduling
 import scheduling
@@ -121,7 +121,7 @@ def test_conditional_pca_learning_vector():
 def test_kwta_presentation():
     """Tests one kwta presentation to half of the units,"""
     s = InputSample(8, 8, [[1] * 8] * 4 + [[0] * 8] * 4)
-    print get_current_time(), scheduling.pynn_scheduling.SIMULATION_END_T
-    kwta_presentation(Tns.p1, s, 100)
-    print get_current_time(), scheduling.pynn_scheduling.SIMULATION_END_T
-    assert get_current_time() == 100
+    kwta_presentation(Tns.p1, s, 5)
+    assert get_current_time() == 5
+    rates = get_rate_encoder(Tns.p1).get_rates()
+    assert_array_less(rates[4:8], rates[0:4])
