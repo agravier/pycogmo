@@ -119,9 +119,16 @@ def test_conditional_pca_learning_vector():
 
 @with_setup(setup_2_layers_ff_net)
 def test_kwta_presentation():
-    """Tests one kwta presentation to half of the units,"""
+    """Tests one kwta presentation to half of the units, followed by
+    another presentation to the second half."""
     s = InputSample(8, 8, [[1] * 8] * 4 + [[0] * 8] * 4)
-    kwta_presentation(Tns.p1, s, 5)
-    assert get_current_time() == 5
+    kwta_presentation(Tns.p1, s, 2)
+    assert get_current_time() == 2
     rates = get_rate_encoder(Tns.p1).get_rates()
     assert_array_less(rates[4:8], rates[0:4])
+    s = InputSample(8, 8, [[0] * 8] * 4 + [[1] * 8] * 4)
+    kwta_presentation(Tns.p1, s, 2)
+    assert get_current_time() == 4
+    rates = get_rate_encoder(Tns.p1).get_rates()
+    assert_array_less(rates[0:4], rates[4:8])
+

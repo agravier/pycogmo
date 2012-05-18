@@ -175,12 +175,7 @@ def test_commit_structure_results_in_complete_output_struct():
     out_units_conn = A.output_struct.units_conn
     # one to one in id1 -> id2, all to all in id2 -> id1
     out_conn = set([(s, r) for (s, r, _) in out_units_conn])
-    print "IDS1", Tns.ids1
-    print "IDS2", Tns.ids2
-    print "out_u_conn", out_units_conn
-    print "out_conn", out_conn
     for s, r in itertools.izip(Tns.ids1, Tns.ids2):
-        print (s, r)
         assert (s, r) in out_conn
     for s, r in itertools.product(Tns.ids2, Tns.ids1):
         assert (s, r) in out_conn

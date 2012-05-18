@@ -146,11 +146,7 @@ def test_input_presentation_actions():
 
 @with_setup(setup_samples_layers_sim)
 def test_schedule_input_presentation():
-    print sim.peek()
-    print sim.now()
     schedule_input_presentation(Tns.p1, Tns.s1, None, 10)
-    print sim.peek()
-    print sim.now()
     assert sim.peek() == sim.now()
     schedule_input_presentation(Tns.p1, Tns.s1, start_t=20, duration=10)
     assert sim.Globals.allEventTimes() == [0, 20]

@@ -446,7 +446,11 @@ class RectilinearOutputRateEncoder(RectilinearLayerAdapter):
         """t_now is the timestamp for the current rates being recorded."""
         if self.idx != -1:
             # Not the first update, so the state is consistent.
-            if t_now - self.update_history[self.idx] < self.update_period:
+            dt = t_now - self.update_history[self.idx]
+            if dt == 0.:
+                # It's a re-update of the current record! Let's rewind history!
+                self.idx = self.previous_idx
+            elif dt < self.update_period:
                 # Premature update -> we may need to increase the arrays length
                 # to have enough place to cover the full window width.
                 # The total time covered by the rate log after idx increment

@@ -96,7 +96,6 @@ def schedule_input_presentation(population,
     input_layer = get_input_layer(population)
     if start_t == None:
         start_t = SIMULATION_END_T
-    print "start_t is", start_t
     p = InputPresentation(input_layer, input_sample, duration)
     p.start(at=start_t)
     if start_t + duration > SIMULATION_END_T:
@@ -184,6 +183,4 @@ def _schedule_output_rate_encoder(rate_enc, start_t, end_t):
     else:
         rc = RateCalculation(rate_enc, end_t)
     rc.start(at=start_t)
-    print "events times", sim.Globals.allEventTimes()
-
 
