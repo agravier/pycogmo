@@ -50,8 +50,8 @@ conditional_pca_learning = _make_so_learning_rule("O'Reilly 2000, CECN.",
         weights + l_rate * post_syn_act * (pre_syn_out - weights))
 
 
-def train_kwta(population,
-               input_layer,
+def train_kwta(trained_population,
+               input_population,
                input_samples,
                num_winners,
                neighbourhood_fn,
@@ -59,38 +59,38 @@ def train_kwta(population,
                learning_rule,
                learning_rate,
                stop_condition):
-    """Self-organized learning. The population should have k-WTA compatible
+    """Self-organized learning. The trained_population should have k-WTA compatible
     lateral inhibition. The neighbourhood function is used for neighbourhood
     learning only, not for inhibition. The neighbourhood function takes a
     population and a unit and returns a list of (unit, weight)."""
     while not stop_condition:
-        kwta_epoch(population, input_layer, input_samples, num_winners,
+        kwta_epoch(trained_population, input_population, input_samples, num_winners,
                    neighbourhood_fn, presentation_duration, learning_rule,
                    learning_rate)
     
 
-def kwta_epoch(population,
-               input_layer,
+def kwta_epoch(trained_population,
+               input_population,
                input_samples,
                num_winners,
                neighbourhood_fn,
                presentation_duration,
                learning_rule,
-               learning_rate)
-    rate_enc = get_rate_encoder(population)
+               learning_rate):
+    rate_enc = get_rate_encoder(trained_population)
     for s in samples:
-        kwta_presentation(population, s, duration, k)
-        argwinners = select_kwta_winners(population, k)
+        kwta_presentation(trained_population, s, duration, k)
+        argwinners = select_kwta_winners(trained_population, k)
         for w in argwinners:
             unit = rate_enc[w[1]][w[0]]
             # Adapt the weights to w 
-            for n in neighbourhood_fn(population, unit):
+            for n in neighbourhood_fn(trained_population, unit):
                 pass # TODO  
 
 
-def kwta_presentation(population, input_layer, sample, duration):
-    schedule_input_presentation(population, sample, None, duration)
-    schedule_output_rate_calculation(population, None, duration)
+def kwta_presentation(trained_population, input_population, sample, duration):
+    schedule_input_presentation(input_population, sample, None, duration)
+    schedule_output_rate_calculation(trained_population, None, duration)
     run_simulation()
 
 
