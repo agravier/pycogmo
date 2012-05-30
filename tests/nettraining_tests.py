@@ -11,9 +11,10 @@ from scheduling.nettraining import *
 # numpy.testing.utils.assert_almost_equal is more useful for arrays than the
 # nose.tools version:
 from numpy.testing.utils import assert_almost_equal, assert_array_less
-from tests.pynn_utils_tests import setup_pynn_populations,\
+from tests.pynn_utils_tests import setup_pynn_populations, \
     setup_registered_rectinilinear_ouput_rate_encoders, Tns
-from common.pynn_utils import enable_recording, InputSample, get_rate_encoder
+from common.pynn_utils import enable_recording, InputSample, \
+    RectilinearOutputRateEncoder, get_rate_encoder
 from tests.pynn_scheduling_tests import setup_clean_simpy
 from scheduling.pynn_scheduling import get_current_time, configure_scheduling
 import scheduling
@@ -132,3 +133,27 @@ def test_kwta_presentation():
     rates = get_rate_encoder(Tns.p1).get_rates()
     assert_array_less(rates[0:4], rates[4:8])
 
+    
+def test_select_kwta_winners():
+    shape = (16, 4)
+    mock_rate_encoder = Mock(spec_set=RectilinearOutputRateEncoder)
+    mock_rates = numpy.array(
+        [[10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10],
+         [0.001, 0, 3.0, 21., 0.0001, 3, 5.0, 11, 18.18, 9, 10, 11, 12, 0.16, 15, 14],
+         [1, 0.5, 0, 0., 0.0001, 21, 0, 1, 0.18, 5, 0, 1, 34, 4, 16, 14],
+         [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]])
+    mock_rate_encoder.get_rates.return_value = mock_rates
+    mock_rate_encoder.shape = shape
+    mock_pop = Mock()
+    import common, scheduling
+    try:
+        scheduling.nettraining.get_rate_encoder = Mock()
+        scheduling.nettraining.get_rate_encoder.return_value = mock_rate_encoder
+        w = select_kwta_winners(mock_pop, 4)
+        eq_(set(w), set([(2, 12), (1, 3), (1, 8), (2, 5)]))
+    finally:
+        scheduling.nettraining.get_rate_encoder = common.pynn_utils.get_rate_encoder
+
+
+def test_kwta_epoch():
+    assert False

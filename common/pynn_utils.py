@@ -39,6 +39,14 @@ class InvalidMatrixShapeError(Exception):
                 self._prov[0], self._prov[1])
 
 
+class SimulationError(Exception):
+    def __init__(self, msg):
+        self._msg = msg
+
+    def __str__(self):
+        return msg
+
+
 class Weights(object):
     """Wraps a 2D array of floating-point numbers that has the same
     dimensions as the connectivity matrix between the two populations
@@ -311,6 +319,9 @@ class RectilinearLayerAdapter(object):
     def __getitem__(self, i):
         return self.unit_adapters_mat[i]
 
+    def get_unit(self, i, j):
+        return self.unit_adapters_mat[i][j][1]
+
 
 INPUT_LAYER_MAX_NAMP_DEFAULT = 100
 class RectilinearInputLayer(RectilinearLayerAdapter):
@@ -447,6 +458,10 @@ class RectilinearOutputRateEncoder(RectilinearLayerAdapter):
         if self.idx != -1:
             # Not the first update, so the state is consistent.
             dt = t_now - self.update_history[self.idx]
+            if dt < 0:
+                raise SimulationError("update_rates was called with a past "
+                                      "update time. Only monotonic updates "
+                                      "are supported.")
             if dt == 0.:
                 # It's a re-update of the current record! Let's rewind history!
                 self.idx = self.previous_idx

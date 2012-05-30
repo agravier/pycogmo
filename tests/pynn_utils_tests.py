@@ -488,6 +488,16 @@ def test_rectilinear_layer_adapter__getitem_out_of_bounds_2():
     rla[12][1]
 
 
+@with_setup(setup_pynn_populations)
+def test_rectilinear_layer_adapter_get_unit():
+    rla = RectilinearLayerAdapter(Tns.p1, 8, 8)
+    rla2 = RectilinearLayerAdapter(Tns.p1, 4, 16)
+    for (i, j) in itertools.product(xrange(8), repeat=2):
+        assert rla.get_unit(i, j) == Tns.p1[i * 8 + j]
+    for (i, j) in itertools.product(xrange(4), xrange(16)):
+        assert rla2.get_unit(i, j) == Tns.p1[i * 16 + j]
+
+
 @with_setup(setup_rectinilearinputlayers)
 def test_rectilinear_input_layer__init():
     assert Tns.ril1.input_scaling == Tns.ril1_max_namp
@@ -615,6 +625,18 @@ def test_rectilinear_ouput_rate_encoder_update_rates_with_irregular_period():
     Tns.count_mock.assert_called()
     for r in splice(rore.get_rates()):
         assert_almost_equal(r, 9.0 / 33, 4)
+
+
+@with_setup(setup_rectinilinear_ouput_rate_encoders)
+@with_setup(setup_mock_pynn_population)
+@raises(SimulationError)
+def test_rectilinear_ouput_rate_encoder_update_rates_with_nonmonotonic_time():
+    rore = RectilinearOutputRateEncoder(Tns.p_mock, 8, 8,
+                                        Tns.rore1_update_p,
+                                        Tns.rore1_win_width)
+    Tns.count_mock.get = lambda _: 3
+    for i in range(5):
+        rore.update_rates(i % 4)
 
 
 @with_setup(setup_mock_pynn_population)
