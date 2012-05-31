@@ -1,4 +1,21 @@
 #!/usr/bin/env python2
+
+# Copyright 2011, 2012 Alexandre Gravier (al.gravier@gmail)
+
+# This file is part of PyCogMo.
+# PyCogMo is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+
+# PyCogMo is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with PyCogMo.  If not, see <http://www.gnu.org/licenses/>.
+
 """ Implements algorithms that schedule the training of the PyNN
 network.
 """
@@ -59,10 +76,13 @@ def train_kwta(trained_population,
                learning_rule,
                learning_rate,
                stop_condition):
-    """Self-organized learning. The trained_population should have k-WTA compatible
-    lateral inhibition. The neighbourhood function is used for neighbourhood
-    learning only, not for inhibition. The neighbourhood function takes a
-    population and a unit and returns a list of (unit, weight)."""
+    """Self-organized learning. The trained_population should have
+    k-WTA compatible lateral inhibition. The neighbourhood function is
+    used for neighbourhood learning only, not for inhibition. The
+    neighbourhood function takes a population and a unit and returns a
+    list of (unit, weight). As a guideline, num_winners should be at
+    least equal to the number of elementary features (elementary as in
+    encodable by one unit) present in each training sample."""
     while not stop_condition:
         kwta_epoch(trained_population, input_population, input_samples, num_winners,
                    neighbourhood_fn, presentation_duration, learning_rule,

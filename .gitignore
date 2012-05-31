@@ -1,6 +1,9 @@
+coverage-html
 logfile
 logs
+runtests.sh
 *.pyc
+.coverage
 .project
 .pydevproject
 .settings
