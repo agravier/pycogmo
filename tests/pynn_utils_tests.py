@@ -29,7 +29,7 @@ import pyNN.brian as pynnn
 import common.pynn_utils
 from common.pynn_utils import *
 from common.utils import splice
-from numpy.ma.testutils import assert_almost_equal
+from numpy.testing import assert_allclose
 
 
 class Tns(object):  # TestNameSpace
@@ -71,6 +71,11 @@ def setup_weights():
                                                range(i * 8, 4 + i * 8))))]
                     for i in range(8)]
     Tns.w2 = Weights(Tns.w2_array)
+    Tns.w3_array = numpy.array(splice(
+        [(list(itertools.chain(*zip(range(i * 8, 4 + i * 8), itertools.repeat(NAN)))),
+          list(itertools.chain(*zip(itertools.repeat(NAN), range(i * 8, 4 + i * 8)))))
+          for i in range(4)]), dtype=float) / 63.
+    Tns.w3 = Weights(Tns.w3_array)
 
 
 def reset_pynn():
@@ -232,6 +237,68 @@ def test_weights_set_item_one_dim():
 @with_setup(setup_weights)
 def test_weights_set_item_one_dim_dimension_mismatch():
     Tns.w1[0] = range(2)
+
+
+@with_setup(setup_weights)
+def test_weights_get_weights_vector():
+    for d in range(8):
+        w1_to_d = Tns.w1.get_weights_vector(d)
+        w2_to_d = Tns.w2.get_weights_vector(d)
+        # with NaNs:
+        if d % 2 == 0:
+            assert not w2_to_d
+        for s in range(8):
+            assert w1_to_d[s] == Tns.w1_array[s][d]
+            if d % 2 == 1:
+                assert w2_to_d[s] == Tns.w2_array[s][d]
+
+
+@with_setup(setup_weights)
+def test_weights_set_weights_vector():
+    Tns.w1.set_weights_vector(0, range(8))
+    assert_allclose(Tns.w1.get_weights_vector(0), range(8))
+    Tns.w2.set_weights_vector(2, [])
+    assert_allclose(Tns.w2.get_weights_vector(2), [])
+    Tns.w2.set_weights_vector(5, range(8))
+    assert_allclose(Tns.w2.get_weights_vector(5), range(8))
+    Tns.w3.set_weights_vector(7, range(4))
+    assert_allclose(Tns.w3.get_weights_vector(7), range(4))
+
+
+@raises(SimulationError)
+@with_setup(setup_weights)
+def test_weights_set_weights_vector_too_short_raises_error_1():
+    Tns.w1.set_weights_vector(0, range(7))
+
+
+@raises(SimulationError)
+@with_setup(setup_weights)
+def test_weights_set_weights_vector_too_short_raises_error_2():
+    Tns.w2.set_weights_vector(1, [])
+
+
+@raises(SimulationError)
+@with_setup(setup_weights)
+def test_weights_set_weights_vector_too_short_raises_error_3():
+    Tns.w3.set_weights_vector(7, range(3))
+
+
+@raises(SimulationError)
+@with_setup(setup_weights)
+def test_weights_set_weights_vector_too_long_raises_error_1():
+    Tns.w1.set_weights_vector(1, range(9))
+
+
+@raises(SimulationError)
+@with_setup(setup_weights)
+def test_weights_set_weights_vector_too_long_raises_error_2():
+    Tns.w2.set_weights_vector(4, [1])
+
+
+@raises(SimulationError)
+@with_setup(setup_weights)
+def test_weights_set_weights_vector_too_long_raises_error_3():
+    Tns.w3.set_weights_vector(1, range(5))
 
 
 @with_setup(setup_weights)
@@ -620,7 +687,7 @@ def test_rectilinear_ouput_rate_encoder_update_rates_and_get_rates():
         rore.update_rates(i*22)
     Tns.count_mock.assert_called()
     for r in splice(rore.get_rates()):
-        assert_almost_equal(r, 3.0 / 22, 4)
+        assert_allclose(r, 3.0 / 22, atol=0.0001)
 
 
 @with_setup(setup_rectinilinear_ouput_rate_encoders)
@@ -640,7 +707,7 @@ def test_rectilinear_ouput_rate_encoder_update_rates_with_irregular_period():
         rore.update_rates(i / 2 * 22 + (i + 1) / 2 * 11)
     Tns.count_mock.assert_called()
     for r in splice(rore.get_rates()):
-        assert_almost_equal(r, 9.0 / 33, 4)
+        assert_allclose(r, 9.0 / 33, atol=0.0001)
 
 
 @with_setup(setup_rectinilinear_ouput_rate_encoders)
@@ -665,7 +732,7 @@ def test_rectilinear_ouput_rate_encoder_f_rate():
     rore.advance_idx()
     rore.advance_idx()
     rates = rore.f_rate(np_a, [100, 150, 200, -50, 0, 50])
-    assert_almost_equal(rates, result_shift_3)
+    assert_allclose(rates, result_shift_3)
 
 
 @with_setup(setup_mock_pynn_population)
@@ -706,3 +773,97 @@ def test_get_rate_encoder():
     from common.pynn_utils import POP_ADAPT_DICT as d
     assert (Tns.p1, RectilinearOutputRateEncoder) in d.keys()
     assert (Tns.p2, RectilinearOutputRateEncoder) in d.keys()
+
+
+def setup_pynn_populations_with_full_connectivity():
+    pynnn.setup()
+    Tns.p1 = pynnn.Population(4, pynnn.IF_curr_alpha,
+                          structure=pynnn.space.Grid2D())
+    Tns.p2 = pynnn.Population(4, pynnn.IF_curr_alpha,
+                          structure=pynnn.space.Grid2D())
+    Tns.prj1_2 = pynnn.Projection(
+        Tns.p1, Tns.p2, pynnn.AllToAllConnector(allow_self_connections=False),
+        target='excitatory')
+
+
+def setup_rectinilinear_ouput_rate_encoders_full():
+    setup_pynn_populations_with_full_connectivity()
+    Tns.rore1_update_p = 22
+    Tns.rore1_win_width = 200
+    Tns.rore1_expected_h_len = 10
+    Tns.rore2_update_p = 15
+    Tns.rore2_win_width = 201
+    Tns.rore2_expected_h_len = 14
+    Tns.rore1 = RectilinearOutputRateEncoder(Tns.p1, 2, 2,
+                                             Tns.rore1_update_p,
+                                             Tns.rore1_win_width)
+    Tns.rore2 = RectilinearOutputRateEncoder(Tns.p2, 2, 2,
+                                             Tns.rore2_update_p,
+                                             Tns.rore2_win_width)
+
+
+def setup_mock_rectinilinear_ouput_rate_encoders_full():
+    setup_rectinilinear_ouput_rate_encoders_full()
+    Tns.rore1.idx = 5
+    r = numpy.array(range(2), dtype=numpy.float)
+    Tns.r = numpy.array([r, r+2],
+                    dtype=numpy.float)
+    Tns.rore1.get_rate = lambda x, y : Tns.r[x][y]
+    common.pynn_utils.POP_ADAPT_DICT[(Tns.p1,
+        common.pynn_utils.RectilinearOutputRateEncoder)] = Tns.rore1
+    common.pynn_utils.POP_ADAPT_DICT[(Tns.p2,
+        common.pynn_utils.RectilinearOutputRateEncoder)] = Tns.rore2
+
+
+def setup_pynn_populations_with_1_to_1_connectivity():
+    pynnn.setup()
+    Tns.p1 = pynnn.Population(64, pynnn.IF_curr_alpha,
+                          structure=pynnn.space.Grid2D())
+    Tns.p2 = pynnn.Population(64, pynnn.IF_curr_alpha,
+                          structure=pynnn.space.Grid2D())
+    Tns.prj1_2 = pynnn.Projection(
+        Tns.p1, Tns.p2, pynnn.OneToOneConnector(),
+        target='excitatory')
+
+
+def setup_rectinilinear_ouput_rate_encoders_1_to_1():
+    setup_pynn_populations_with_1_to_1_connectivity()
+    Tns.rore1_update_p = 22
+    Tns.rore1_win_width = 200
+    Tns.rore1_expected_h_len = 10
+    Tns.rore2_update_p = 15
+    Tns.rore2_win_width = 201
+    Tns.rore2_expected_h_len = 14
+    Tns.rore1 = RectilinearOutputRateEncoder(Tns.p1, 8, 8,
+                                             Tns.rore1_update_p,
+                                             Tns.rore1_win_width)
+    Tns.rore2 = RectilinearOutputRateEncoder(Tns.p2, 8, 8,
+                                             Tns.rore2_update_p,
+                                             Tns.rore2_win_width)
+
+
+def setup_mock_rectinilinear_ouput_rate_encoders_1_to_1():
+    setup_rectinilinear_ouput_rate_encoders_1_to_1()
+    Tns.rore1.idx = 5
+    r = numpy.array(range(8), dtype=numpy.float)
+    Tns.r = numpy.array([r, r+8, r+16, r+24, r+32, r+40, r+48, r+56],
+                    dtype=numpy.float)
+    Tns.rore1.get_rate = lambda x, y : Tns.r[x][y]
+    common.pynn_utils.POP_ADAPT_DICT[(Tns.p1,
+        common.pynn_utils.RectilinearOutputRateEncoder)] = Tns.rore1
+    common.pynn_utils.POP_ADAPT_DICT[(Tns.p2,
+        common.pynn_utils.RectilinearOutputRateEncoder)] = Tns.rore2
+
+
+@with_setup(setup_mock_rectinilinear_ouput_rate_encoders_full)
+def test_presynaptic_outputs_full_connectivity():
+    for u in Tns.p2:
+        assert_allclose(presynaptic_outputs(u, Tns.prj1_2), splice(Tns.r))
+
+
+@with_setup(setup_mock_rectinilinear_ouput_rate_encoders_1_to_1)
+def test_presynaptic_outputs_1_to_1_connectivity():
+    for u in Tns.p2:
+        assert_allclose(presynaptic_outputs(u, Tns.prj1_2),
+                        [splice(Tns.r)[Tns.p2.id_to_index(u)]])
+

@@ -31,7 +31,7 @@ from PIL import Image
 import pyNN.brian as pynnn
 import types
 
-from utils import LOGGER, is_square
+from utils import LOGGER, is_square, splice
 
 
 class InvalidFileFormatError(Exception):
@@ -61,7 +61,36 @@ class SimulationError(Exception):
         self._msg = msg
 
     def __str__(self):
-        return msg
+        return self._msg
+
+
+def presynaptic_outputs(unit, projection):
+    """Returns the vector of all firing rates of units in the
+    presynaptic population that are connected to the given unit.  This
+    assumes that the presynaptic population has a rate encoder with
+    records."""
+    # This is an iterator of pairs of lists of units.
+    connectivity = projection.connection_manager.indices.itervalues()
+    pre_population = projection.pre
+    post_population = projection.post
+    if unit not in post_population:        
+        raise SimulationError("Unit not found in post-synaptic "
+                              "population.")
+    target_unit_index = post_population.id_to_index(unit)
+    renc = get_rate_encoder(pre_population)
+    if renc.idx < 0:
+        raise SimulationError(
+            "Cannot compute presynaptic activation because the "
+            "rate encoder of the presynaptic population does not "
+            "contain any record.")
+    rates = numpy.array([])
+    # Take each pair and for those connections to our unit, record the rate.
+    for prelist, postlist in connectivity:
+        rates_to_add = [ renc.get_rate_for_unit_index(pre) for pre, _ in
+                        itertools.ifilter((lambda pair: pair[1] == target_unit_index),
+                                           itertools.izip(prelist, postlist)) ]
+        rates=numpy.append(rates, rates_to_add)
+    return rates
 
 
 class Weights(object):
@@ -145,6 +174,31 @@ class Weights(object):
 
     def __setitem__(self, key, value):
         self._weights[key] = value
+
+    def get_weights_vector(self, target_idx):
+        """Returns the weights vector to unit target_idx (target unit
+        index in target population). NaNs (weights of connections from
+        non-connected units) are omitted."""
+        w_with_nans = [self._weights[i][target_idx]
+                       for i in xrange(self._dim1)]
+        return list(itertools.ifilterfalse(math.isnan, w_with_nans))
+
+    def set_weights_vector(self, target_idx, weights):
+        """Sets the weights vector to unit target_idx (target unit
+        index in target population). The weight vector should have as
+        many elements as connected units (no NaN allowed)."""
+        wi = 0
+        try:
+            for i in xrange(self._dim1):
+                if not math.isnan(self._weights[i][target_idx]):
+                    self._weights[i][target_idx] = weights[wi]
+                    wi += 1
+        except IndexError:
+            raise SimulationError("Dimension mismatch (not enough elements "
+                                  "to assign to weights vector).")
+        if wi < len(weights):
+            raise SimulationError("Dimension mismatch (too many elements "
+                                  "to assign to weights vector).")
 
     def adjusted(self, error_mat, learning=None):
         """Returns a matrix adjusted by removing the error terms
@@ -513,8 +567,14 @@ class RectilinearOutputRateEncoder(RectilinearLayerAdapter):
         r = numpy.zeros((self._dim1, self._dim2), dtype=numpy.float)
         for x in xrange(self._dim1):
             for y in xrange(self._dim2):
-                r[x][y] = self.f_rate(self.unit_adapters_mat[x][y][0])
+                r[x][y] = self.get_rate(x, y)
         return r
+
+    def get_rate_for_unit_index(self, unit_index):
+        return self.get_rate(unit_index / self._dim1, unit_index % self._dim2)
+
+    def get_rate(self, x, y):
+        return self.f_rate(self.unit_adapters_mat[x][y][0])
 
     def f_rate(self, np_a, update_history=None):
         """Returns the weighted average of the rates recorded in the

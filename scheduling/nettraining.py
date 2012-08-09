@@ -23,7 +23,7 @@ network.
 from SimPy.Simulation import Process
 
 from common.pynn_utils import get_weights, set_weights, get_input_layer, \
-    get_rate_encoder
+    get_rate_encoder, presynaptic_outputs
 from common.utils import log_tick, splice, LOGGER
 from scheduling.pynn_scheduling import run_simulation, \
     schedule_input_presentation, schedule_output_rate_calculation
@@ -69,6 +69,7 @@ conditional_pca_learning = _make_so_learning_rule("O'Reilly 2000, CECN.",
 
 def train_kwta(trained_population,
                input_population,
+               projection,
                input_samples,
                num_winners,
                neighbourhood_fn,
@@ -77,20 +78,23 @@ def train_kwta(trained_population,
                learning_rate,
                stop_condition):
     """Self-organized learning. The trained_population should have
-    k-WTA compatible lateral inhibition. The neighbourhood function is
-    used for neighbourhood learning only, not for inhibition. The
+    k-WTA compatible inhibition. The neighbourhood function is used
+    for neighbourhood learning only, not for inhibition. The
     neighbourhood function takes a population and a unit and returns a
-    list of (unit, weight). As a guideline, num_winners should be at
-    least equal to the number of elementary features (elementary as in
-    encodable by one unit) present in each training sample."""
-    while not stop_condition:
-        kwta_epoch(trained_population, input_population, input_samples, num_winners,
-                   neighbourhood_fn, presentation_duration, learning_rule,
+    list of (unit, weight). It can also be None. As a guideline,
+    num_winners should be at least equal to the number of elementary
+    features (elementary as in encodable by one unit) present in each
+    training sample."""
+    while not stop_condition:        
+        kwta_epoch(trained_population, input_population, projection,
+                   input_samples, num_winners, neighbourhood_fn,
+                   presentation_duration, learning_rule,
                    learning_rate)
     
 
 def kwta_epoch(trained_population,
                input_population,
+               projection,
                input_samples,
                num_winners,
                neighbourhood_fn,
@@ -98,14 +102,28 @@ def kwta_epoch(trained_population,
                learning_rule,
                learning_rate):
     rate_enc = get_rate_encoder(trained_population)
-    for s in samples:
-        kwta_presentation(trained_population, s, duration, k)
+    if neighbourhood_fn == None:
+        neighbourhood_fn = lambda _, u : (u, 1)
+    for s in input_samples:
+        weights = get_weights(projection)
+        kwta_presentation(trained_population, s, presentation_duration, k)
         argwinners = select_kwta_winners(trained_population, k)
         for w in argwinners:
-            unit = rate_enc[w[1]][w[0]]
-            # Adapt the weights to w 
-            for n in neighbourhood_fn(trained_population, unit):
-                pass # TODO  
+            main_unit = rate_enc[w[1]][w[0]]
+            # Adapt the weights for winner w and any activated neighbour 
+            for unit, factor in neighbourhood_fn(trained_population, main_unit):
+                unit_index = projection.id_to_index(unit)
+                # weight vector to the unit
+                wv = weights.get_weights_vector(unit_index)
+                # input to the unit
+                pre_syn_out = presynaptic_outputs(unit, projection)
+                # calculate and apply the new weight vector
+                new_wv = learning_rule(pre_syn_out,
+                                       post_syn_act,
+                                       wv,
+                                       learning_rate*factor)
+                weights.set_weights_vector(unit_index, new_wv)
+        set_weights(projection, weights)
 
 
 def kwta_presentation(trained_population, input_population, sample, duration):

@@ -26,7 +26,8 @@ from numpy import array as npa
 from scheduling.nettraining import *
 # numpy.testing.utils.assert_almost_equal is more useful for arrays than the
 # nose.tools version:
-from numpy.testing.utils import assert_almost_equal, assert_array_less
+from numpy.testing import assert_allclose
+from numpy.testing.utils import assert_array_less
 from tests.pynn_utils_tests import setup_pynn_populations, \
     setup_registered_rectinilinear_ouput_rate_encoders, Tns
 from common.pynn_utils import enable_recording, InputSample, \
@@ -88,17 +89,17 @@ def test_hebb_learning_vector():
 
 @with_setup(setup_data)
 def test_oja_learning_scalar():
-    assert_almost_equal(oja_learning(Tns.s_in_1, Tns.s_out_1, Tns.s_w_1, 1),
+    assert_allclose(oja_learning(Tns.s_in_1, Tns.s_out_1, Tns.s_w_1, 1),
                         0.72)
     assert oja_learning(Tns.s_in_2, Tns.s_out_2, Tns.s_w_2, 0.5) == Tns.s_w_2
-    assert_almost_equal(oja_learning(Tns.s_in_3, Tns.s_out_3, Tns.s_w_3, 3.5),
+    assert_allclose(oja_learning(Tns.s_in_3, Tns.s_out_3, Tns.s_w_3, 3.5),
                         -1)
 
 
 @with_setup(setup_data)
 def test_oja_learning_vector():
     assert len(oja_learning(Tns.v_in_1, Tns.s_out_1, Tns.v_w_1, 1)) == 5
-    assert_almost_equal(oja_learning(Tns.v_in_1, Tns.s_out_1, Tns.v_w_1, 1),
+    assert_allclose(oja_learning(Tns.v_in_1, Tns.s_out_1, Tns.v_w_1, 1),
         [0., 0.919, 0.057, 0.313, 0.64])
     assert len(oja_learning(Tns.v_in_2, Tns.s_out_2, Tns.v_w_2, 0.5)) == 5
     assert (oja_learning(Tns.v_in_2, Tns.s_out_2, Tns.v_w_2, 0.5) == \
@@ -110,11 +111,11 @@ def test_oja_learning_vector():
 
 @with_setup(setup_data)
 def test_conditional_pca_learning_scalar():
-    assert_almost_equal(conditional_pca_learning(Tns.s_in_1, Tns.s_out_1,
+    assert_allclose(conditional_pca_learning(Tns.s_in_1, Tns.s_out_1,
         Tns.s_w_1, 1), 0.72)
     assert conditional_pca_learning(Tns.s_in_2, Tns.s_out_2, Tns.s_w_2, 0.5) \
         == Tns.s_w_2
-    assert_almost_equal(conditional_pca_learning(Tns.s_in_3, Tns.s_out_3,
+    assert_allclose(conditional_pca_learning(Tns.s_in_3, Tns.s_out_3,
         Tns.s_w_3, 3.5), 6.7)
 
 
@@ -122,7 +123,7 @@ def test_conditional_pca_learning_scalar():
 def test_conditional_pca_learning_vector():
     assert len(conditional_pca_learning(Tns.v_in_1, Tns.s_out_1, \
         Tns.v_w_1, 1)) == 5
-    assert_almost_equal(conditional_pca_learning(Tns.v_in_1, Tns.s_out_1, \
+    assert_allclose(conditional_pca_learning(Tns.v_in_1, Tns.s_out_1, \
         Tns.v_w_1, 1), [0., 0.91, 0.03, 0.25, 0.55])
     assert len(conditional_pca_learning(Tns.v_in_2, Tns.s_out_2, \
         Tns.v_w_2, 0.5)) == 5
@@ -171,5 +172,43 @@ def test_select_kwta_winners():
         scheduling.nettraining.get_rate_encoder = common.pynn_utils.get_rate_encoder
 
 
-def test_kwta_epoch():
+def setup_input_samples():
+    Tns.sample1 = [[1] * 8] * 4 + [[0] * 8] * 4
+    Tns.sample2 = ([[0, 1] * 4] + [[1, 0] * 4]) * 4
+
+
+@with_setup(setup_input_samples)
+@with_setup(setup_2_layers_ff_net)
+def test_kwta_epoch_1_winner():
+    w_before_1st_epoch = get_weights(Tns.prj1_2)
+    kwta_epoch(trained_population=Tns.p2,
+               input_population=Tns.p1,
+               projection=Tns.prj1_2,
+               input_samples=itertools.repeat(Tns.sample1, 10),
+               num_winners=1,
+               neighbourhood_fn=None,
+               presentation_duration=1000,
+               learning_rule=conditional_pca_learning,
+               learning_rate=0.1)
+    w_after_1st_epoch = get_weights(Tns.prj1_2)
+    w_diff_1 = w_after_1st_epoch - w_before_1st_epoch
+    argwinner_1 = numpy.argmax(w_diff_1)
+    2dargwinner_1 = numpy.unravel_index(argwinner, w_after_1st_epoch.shape)
+    # assert diff is all 0 except winner
+    assert False
+    kwta_epoch(trained_population=Tns.p2,
+               input_population=Tns.p1,
+               projection=Tns.prj1_2,
+               input_samples=itertools.repeat(Tns.sample1, 10),
+               num_winners=1,
+               neighbourhood_fn=None,
+               presentation_duration=1000,
+               learning_rule=conditional_pca_learning,
+               learning_rate=0.1)
+    w_after_2nd_epoch = get_weights(Tns.prj1_2)
+    w_diff_2 = w_after_2nd_epoch - w_before_1st_epoch
+    argwinner_2 = numpy.argmax(w_diff_2)
+    assert argwinner_1 == argwinner_2
+    2dargwinner_2 = numpy.unravel_index(argwinner, w_after_1st_epoch.shape)
+    # assert still only one non zero diff
     assert False
