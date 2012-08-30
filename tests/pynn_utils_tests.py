@@ -62,20 +62,20 @@ def list_units(ril):
 
 def setup_weights():
     Tns.w0_array = []
-    Tns.w0 = Weights(Tns.w0_array)
+    Tns.w0 = Weights(Tns.w0_array, 1)
     Tns.w1_array = [[j / 63. for j in range(i * 8, 8 + i * 8)]
                     for i in range(8)]
-    Tns.w1 = Weights(Tns.w1_array)
+    Tns.w1 = Weights(Tns.w1_array, 1)
     Tns.w2_array = [[j / 63. for j in
                      list(itertools.chain(*zip(itertools.repeat(NAN),
                                                range(i * 8, 4 + i * 8))))]
                     for i in range(8)]
-    Tns.w2 = Weights(Tns.w2_array)
+    Tns.w2 = Weights(Tns.w2_array, 1)
     Tns.w3_array = numpy.array(splice(
         [(list(itertools.chain(*zip(range(i * 8, 4 + i * 8), itertools.repeat(NAN)))),
           list(itertools.chain(*zip(itertools.repeat(NAN), range(i * 8, 4 + i * 8)))))
           for i in range(4)]), dtype=float) / 63.
-    Tns.w3 = Weights(Tns.w3_array)
+    Tns.w3 = Weights(Tns.w3_array, 1)
 
 
 def reset_pynn():
@@ -91,6 +91,9 @@ def setup_pynn_populations():
     Tns.prj1_2 = pynnn.Projection(
         Tns.p1, Tns.p2, pynnn.AllToAllConnector(allow_self_connections=False),
         target='excitatory')
+    # Weights in nA as IF_curr_alpha uses current-based synapses
+    Tns.prj1_2.setWeights(10)
+    Tns.max_weight = 200
 
 
 def setup_mock_pynn_population():
@@ -157,12 +160,12 @@ def test_weights__init__empty():
 
 @with_setup(setup_weights)
 def test_weights_eq():
-    assert Tns.w1_array == Tns.w1.weights, "initial data == property"
+    assert Tns.w1_array == Tns.w1.non_normalized_weights, "initial data == internal data"
     assert Tns.w1.__eq__(numpy.array(Tns.w1_array)), "weights == numpy array"
     assert not Tns.w1.__eq__([1]), "length mismatch in dimension 1"
-    assert Tns.w1.__eq__(Weights(Tns.w1_array)), "only the instance changes"
-    assert Tns.w2_array != Tns.w2.weights, "NaNs should not be equal"
-    assert Tns.w2.__eq__(Weights(Tns.w2_array)), "NaNs should be ignored"
+    assert Tns.w1.__eq__(Weights(Tns.w1_array, 1)), "only the instance changes"
+    assert Tns.w2_array != Tns.w2.non_normalized_weights, "NaNs should not be equal"
+    assert Tns.w2.__eq__(Weights(Tns.w2_array, 1)), "NaNs should be ignored"
     assert Tns.w1 != Tns.w2, "completely different objects, =="
     assert not Tns.w1.__eq__(Tns.w2), "completely different objects, __eq__"
     assert Tns.w0.__eq__([]), "empty weights == []"
@@ -180,27 +183,27 @@ def test_weights_shape():
 
 @with_setup(setup_weights)
 def test_weights_accessors():
-    assert (Tns.w1.numpy_weights == numpy.array(Tns.w1_array)).all()
-    assert len(Tns.w1.flat_weights) == numpy.array(Tns.w1_array).size
-    w = Weights([])
-    w.weights = numpy.array(Tns.w1_array)
+    assert (Tns.w1.non_normalized_numpy_weights == numpy.array(Tns.w1_array)).all()
+    assert len(Tns.w1.flat_non_normalized_weights) == numpy.array(Tns.w1_array).size
+    w = Weights([], 1)
+    w.non_normalized_weights = numpy.array(Tns.w1_array)
     assert Tns.w1 == w
     assert Tns.w1[1][2] == Tns.w1_array[1][2]
     Tns.w1[1][2] = 1
     assert Tns.w1[1][2] == 1
-    Tns.w1.weights = Tns.w2_array
+    Tns.w1.non_normalized_weights = Tns.w2_array
     assert Tns.w1 == Tns.w2
-    Tns.w1.weights = Tns.w1_array
+    Tns.w1.non_normalized_weights = Tns.w1_array
     assert Tns.w1 == Tns.w1
-    Tns.w1.weights = Tns.w2
+    Tns.w1.non_normalized_weights = Tns.w2
     assert Tns.w1 == Tns.w2
-    assert Tns.w2 == Weights(Tns.w2_array)
+    assert Tns.w2 == Weights(Tns.w2_array, 1)
 
 
 @raises(TypeError)
 @with_setup(setup_weights)
 def test_weights_setter_raises_type_error():
-    Tns.w1.weights = "1"
+    Tns.w1.non_normalized_weights = "1"
 
 
 @raises(IndexError)
@@ -228,22 +231,22 @@ def test_weights_set_item_exception_2():
 
 
 @with_setup(setup_weights)
-def test_weights_set_item_one_dim():
-    Tns.w1[0] = range(8)
-    assert Tns.w1[0][2] == 2
-
-
-@raises(ValueError)
-@with_setup(setup_weights)
-def test_weights_set_item_one_dim_dimension_mismatch():
-    Tns.w1[0] = range(2)
+def test_weights_set_item_1():
+    Tns.w1[0][1] = .1337
+    assert Tns.w1[0][1] == .1337
 
 
 @with_setup(setup_weights)
-def test_weights_get_weights_vector():
+def test_weights_set_item_2():
+    Tns.w1.set_non_normalized_weight(1, 2, 2.)
+    assert Tns.w1[1][2] == 2.
+
+
+@with_setup(setup_weights)
+def test_weights_get_normalized_weights_vector():
     for d in range(8):
-        w1_to_d = Tns.w1.get_weights_vector(d)
-        w2_to_d = Tns.w2.get_weights_vector(d)
+        w1_to_d = Tns.w1.get_normalized_weights_vector(d)
+        w2_to_d = Tns.w2.get_normalized_weights_vector(d)
         # with NaNs:
         if d % 2 == 0:
             assert not w2_to_d
@@ -254,89 +257,69 @@ def test_weights_get_weights_vector():
 
 
 @with_setup(setup_weights)
-def test_weights_set_weights_vector():
-    Tns.w1.set_weights_vector(0, range(8))
-    assert_allclose(Tns.w1.get_weights_vector(0), range(8))
-    Tns.w2.set_weights_vector(2, [])
-    assert_allclose(Tns.w2.get_weights_vector(2), [])
-    Tns.w2.set_weights_vector(5, range(8))
-    assert_allclose(Tns.w2.get_weights_vector(5), range(8))
-    Tns.w3.set_weights_vector(7, range(4))
-    assert_allclose(Tns.w3.get_weights_vector(7), range(4))
+def test_weights_set_normalized_weights_vector():
+    Tns.w1.set_normalized_weights_vector(0, range(8))
+    assert_allclose(Tns.w1.get_normalized_weights_vector(0), range(8))
+    Tns.w2.set_normalized_weights_vector(2, [])
+    assert_allclose(Tns.w2.get_normalized_weights_vector(2), [])
+    Tns.w2.set_normalized_weights_vector(5, range(8))
+    assert_allclose(Tns.w2.get_normalized_weights_vector(5), range(8))
+    Tns.w3.set_normalized_weights_vector(7, range(4))
+    assert_allclose(Tns.w3.get_normalized_weights_vector(7), range(4))
 
 
 @raises(SimulationError)
 @with_setup(setup_weights)
-def test_weights_set_weights_vector_too_short_raises_error_1():
-    Tns.w1.set_weights_vector(0, range(7))
+def test_weights_set_normalized_weights_vector_too_short_raises_error_1():
+    Tns.w1.set_normalized_weights_vector(0, range(7))
 
 
 @raises(SimulationError)
 @with_setup(setup_weights)
-def test_weights_set_weights_vector_too_short_raises_error_2():
-    Tns.w2.set_weights_vector(1, [])
+def test_weights_set_normalized_weights_vector_too_short_raises_error_2():
+    Tns.w2.set_normalized_weights_vector(1, [])
 
 
 @raises(SimulationError)
 @with_setup(setup_weights)
-def test_weights_set_weights_vector_too_short_raises_error_3():
-    Tns.w3.set_weights_vector(7, range(3))
+def test_weights_set_normalized_weights_vector_too_short_raises_error_3():
+    Tns.w3.set_normalized_weights_vector(7, range(3))
 
 
 @raises(SimulationError)
 @with_setup(setup_weights)
-def test_weights_set_weights_vector_too_long_raises_error_1():
-    Tns.w1.set_weights_vector(1, range(9))
+def test_weights_set_normalized_weights_vector_too_long_raises_error_1():
+    Tns.w1.set_normalized_weights_vector(1, range(9))
 
 
 @raises(SimulationError)
 @with_setup(setup_weights)
-def test_weights_set_weights_vector_too_long_raises_error_2():
-    Tns.w2.set_weights_vector(4, [1])
+def test_weights_set_normalized_weights_vector_too_long_raises_error_2():
+    Tns.w2.set_normalized_weights_vector(4, [1])
 
 
 @raises(SimulationError)
 @with_setup(setup_weights)
-def test_weights_set_weights_vector_too_long_raises_error_3():
-    Tns.w3.set_weights_vector(1, range(5))
-
-
-@with_setup(setup_weights)
-def test_weights_adjusted():
-    error = deepcopy(Tns.w1_array)
-    assert Tns.w2 == Tns.w2.adjusted(error, learning=0)
-
-    r1 = Tns.w1.adjusted(error, learning=1)
-    assert r1 == numpy.zeros_like(error)
-
-    r1b = Tns.w1.adjusted(Weights(error), learning=1)
-    assert r1 == r1b
-
-    assert Tns.w2.adjusted(numpy.zeros_like(error)) == Tns.w2
-
-    for i, j in itertools.product(xrange(8), repeat=2):
-        error[i][j] = 1
-        Tns.w2_array[i][j] = Tns.w2_array[i][j] - Tns.w2._default_l_rate
-
-    assert Tns.w2.adjusted(error) == Weights(Tns.w2_array)
+def test_weights_set_normalized_weights_vector_too_long_raises_error_3():
+    Tns.w3.set_normalized_weights_vector(1, range(5))
 
 
 @with_setup(setup_rectinilearinputlayers)
 def test_get_weights():
     proj_w = Tns.prj1_2.getWeights(format='array')
-    assert get_weights(Tns.prj1_2).shape == \
-        proj_w.shape
-    assert (get_weights(Tns.prj1_2).numpy_weights == \
-        proj_w).all()
+    w = get_weights(Tns.prj1_2, 1.)
+    assert w.shape == proj_w.shape
+    assert (w.non_normalized_numpy_weights == proj_w).all()
+    assert w._max_weight == 1.
 
 
 @with_setup(setup_rectinilearinputlayers)
 @with_setup(setup_weights)
 def test_set_weights():
-    w = Weights(numpy.zeros_like(Tns.prj1_2.getWeights(format='array')))
+    w = Weights(numpy.zeros_like(Tns.prj1_2.getWeights(format='array')), 1)
     set_weights(Tns.prj1_2, w)
-    proj_w = get_weights(Tns.prj1_2).numpy_weights
-    assert (proj_w == w.weights).all()
+    proj_w = get_weights(Tns.prj1_2, 1).non_normalized_numpy_weights
+    assert (proj_w == w.non_normalized_numpy_weights).all()
 
 
 @raises(TypeError)

@@ -64,6 +64,8 @@ def setup_2_layers_ff_net():
     configure_scheduling()
     setup_registered_rectinilinear_ouput_rate_encoders()
     enable_recording(Tns.p1, Tns.p2)
+    schedule_output_rate_calculation(Tns.p1)
+    schedule_output_rate_calculation(Tns.p2)
 
 
 @with_setup(setup_data)
@@ -173,42 +175,55 @@ def test_select_kwta_winners():
 
 
 def setup_input_samples():
-    Tns.sample1 = [[1] * 8] * 4 + [[0] * 8] * 4
-    Tns.sample2 = ([[0, 1] * 4] + [[1, 0] * 4]) * 4
+    Tns.sample1 = InputSample(8, 8, [[1] * 8] * 4 + [[0] * 8] * 4)
+    Tns.sample2 = InputSample(8, 8, ([[0, 1] * 4] + [[1, 0] * 4]) * 4)
 
 
 @with_setup(setup_input_samples)
 @with_setup(setup_2_layers_ff_net)
 def test_kwta_epoch_1_winner():
-    w_before_1st_epoch = get_weights(Tns.prj1_2)
+    sum_weights_before_1st_epoch = \
+        numpy.add.reduce(get_weights(Tns.prj1_2, Tns.max_weight)._weights, axis=0)
     kwta_epoch(trained_population=Tns.p2,
                input_population=Tns.p1,
                projection=Tns.prj1_2,
                input_samples=itertools.repeat(Tns.sample1, 10),
                num_winners=1,
                neighbourhood_fn=None,
-               presentation_duration=1000,
+               presentation_duration=10,
                learning_rule=conditional_pca_learning,
-               learning_rate=0.1)
-    w_after_1st_epoch = get_weights(Tns.prj1_2)
-    w_diff_1 = w_after_1st_epoch - w_before_1st_epoch
-    argwinner_1 = numpy.argmax(w_diff_1)
-    2dargwinner_1 = numpy.unravel_index(argwinner, w_after_1st_epoch.shape)
+               learning_rate=0.1,
+               max_weight_value=Tns.max_weight)
+    sum_weights_after_1st_epoch = \
+        numpy.add.reduce(get_weights(Tns.prj1_2, Tns.max_weight)._weights, axis=0)
+    weights_diff_1 = sum_weights_after_1st_epoch - sum_weights_before_1st_epoch
+    argwinner_1 = numpy.argmax(weights_diff_1)
     # assert diff is all 0 except winner
-    assert False
+    winner_diff_1 = weights_diff_1[argwinner_1]
+    assert winner_diff_1 > 0
+    weights_diff_1_nowin = numpy.array(weights_diff_1)
+    weights_diff_1_nowin[argwinner_1] -= winner_diff_1
+    assert_allclose(weights_diff_1_nowin, numpy.zeros(len(weights_diff_1)))
+    # second epoch
     kwta_epoch(trained_population=Tns.p2,
                input_population=Tns.p1,
                projection=Tns.prj1_2,
                input_samples=itertools.repeat(Tns.sample1, 10),
                num_winners=1,
                neighbourhood_fn=None,
-               presentation_duration=1000,
+               presentation_duration=10,
                learning_rule=conditional_pca_learning,
-               learning_rate=0.1)
-    w_after_2nd_epoch = get_weights(Tns.prj1_2)
-    w_diff_2 = w_after_2nd_epoch - w_before_1st_epoch
-    argwinner_2 = numpy.argmax(w_diff_2)
+               learning_rate=0.1,
+               max_weight_value=Tns.max_weight)
+    sum_weights_after_2nd_epoch = \
+        numpy.add.reduce(get_weights(Tns.prj1_2, Tns.max_weight)._weights, axis=0)
+    weights_diff_2 = sum_weights_after_2nd_epoch - sum_weights_before_1st_epoch
+    argwinner_2 = numpy.argmax(weights_diff_2)
     assert argwinner_1 == argwinner_2
-    2dargwinner_2 = numpy.unravel_index(argwinner, w_after_1st_epoch.shape)
     # assert still only one non zero diff
-    assert False
+    winner_diff_2 = weights_diff_2[argwinner_2]
+    assert winner_diff_2 > 0
+    weights_diff_2_nowin = numpy.array(weights_diff_2)
+    weights_diff_2_nowin[argwinner_2] -= winner_diff_2
+    assert_allclose(weights_diff_2_nowin, numpy.zeros(len(weights_diff_2)))
+

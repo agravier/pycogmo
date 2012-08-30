@@ -27,6 +27,7 @@ from math import isnan, ceil
 import magic
 import math
 import numpy
+import operator
 from PIL import Image
 import pyNN.brian as pynnn
 import types
@@ -66,17 +67,15 @@ class SimulationError(Exception):
 
 def presynaptic_outputs(unit, projection):
     """Returns the vector of all firing rates of units in the
-    presynaptic population that are connected to the given unit.  This
+    presynaptic population that are connected to the given unit. This
     assumes that the presynaptic population has a rate encoder with
     records."""
-    # This is an iterator of pairs of lists of units.
-    connectivity = projection.connection_manager.indices.itervalues()
     pre_population = projection.pre
     post_population = projection.post
-    if unit not in post_population:        
+    if unit not in post_population:
         raise SimulationError("Unit not found in post-synaptic "
                               "population.")
-    target_unit_index = post_population.id_to_index(unit)
+    unit_index = post_population.id_to_index(unit)
     renc = get_rate_encoder(pre_population)
     if renc.idx < 0:
         raise SimulationError(
@@ -84,12 +83,12 @@ def presynaptic_outputs(unit, projection):
             "rate encoder of the presynaptic population does not "
             "contain any record.")
     rates = numpy.array([])
-    # Take each pair and for those connections to our unit, record the rate.
-    for prelist, postlist in connectivity:
-        rates_to_add = [ renc.get_rate_for_unit_index(pre) for pre, _ in
-                        itertools.ifilter((lambda pair: pair[1] == target_unit_index),
-                                           itertools.izip(prelist, postlist)) ]
-        rates=numpy.append(rates, rates_to_add)
+    connectivity = projection.connections.get('weight', 'array')
+    connectivity_to_unit = \
+        [(i, not math.isnan(connectivity[i][unit_index])) for i in xrange(len(connectivity))]
+    rates_to_add = [renc.get_rate_for_unit_index(i) for i, _
+        in itertools.ifilter((lambda v: v[1]), connectivity_to_unit)]
+    rates = numpy.append(rates, rates_to_add)
     return rates
 
 
@@ -97,12 +96,22 @@ class Weights(object):
     """Wraps a 2D array of floating-point numbers that has the same
     dimensions as the connectivity matrix between the two populations
     of neurons connected. Non-connected units i and j have
-    weights[i][j] == NaN. l_rate can be given to set a different
-    default learning rate than 0.01"""
-    def __init__(self, weights_array, l_rate=0.01):
-        self._weights = numpy.array(weights_array)
-        self._default_l_rate = l_rate
+    weights[i][j] == NaN. Initial weights should be input (and are
+    internally stored) in nA or micro-Siemens. As they need to be
+    normalized for the purpose of learning, max_weight needs to be
+    provided. It is a model-specific and should reflect the maximum
+    conductance of a synapse/group of synpatic connections from one
+    cell to the other.
+
+    All methods and properties return normalized weights unless
+    specified otherwise."""
+    def __init__(self, weights_array, max_weight):
+        self._max_weight = max_weight * 1.
+        self._weights = numpy.array(weights_array) / self._max_weight
         self._update_shape()
+
+# TODO: use max_weight for hard bounding here and make soft bounded
+# learning functions in nettraining.
 
     def __eq__(self, other):
         internalw = None
@@ -113,17 +122,19 @@ class Weights(object):
         elif not isinstance(other, Weights):
             return False
         else:
-            internalw = other.numpy_weights
-        if len(numpy.atleast_1d(self.numpy_weights)) != \
+            if other.max_weight != self.max_weight:
+                return False
+            internalw = other.non_normalized_numpy_weights
+        if len(numpy.atleast_1d(self.non_normalized_numpy_weights)) != \
                 len(numpy.atleast_1d(internalw)):
             return False
-        n_r = len(self.numpy_weights)
+        n_r = len(self.non_normalized_numpy_weights)
         for i in xrange(n_r):
-            l = len(numpy.atleast_1d(self.numpy_weights[i]))
+            l = len(numpy.atleast_1d(self.non_normalized_numpy_weights[i]))
             if l != len(numpy.atleast_1d(internalw[i])):
                 return False
             for j in xrange(l):
-                v1 = self.numpy_weights[i][j]
+                v1 = self.non_normalized_numpy_weights[i][j]
                 v2 = internalw[i][j]
                 if (isnan(v1) and isnan(v2)):
                     continue
@@ -140,42 +151,114 @@ class Weights(object):
             self._dim2 = 0
 
     @property
+    def max_weight(self):
+        return self._max_weight
+
+
+    @property
     def shape(self):
         return self._dim1, self._dim2
 
     @property
-    def weights(self):
-        return self._weights.tolist()
+    def non_normalized_weights(self):
+        return (self._weights * self._max_weight).tolist()
 
-    @property
-    def flat_weights(self):
-        return list(itertools.chain.from_iterable(self._weights.tolist()))
-
-    @property
-    def numpy_weights(self):
-        return self._weights
-
-    @weights.setter
-    def weights(self, weights_array):
+    @non_normalized_weights.setter
+    def non_normalized_weights(self, weights_array):
         if isinstance(weights_array, numpy.ndarray):
-            self._weights = weights_array
+            self._weights = weights_array / self._max_weight
         elif isinstance(weights_array, list):
-            self._weights = numpy.array(weights_array)
+            self._weights = numpy.array(weights_array) / self._max_weight
         elif isinstance(weights_array, Weights):
-            self._weights = weights_array.numpy_weights
+            self._weights = weights_array.normalized_numpy_weights
         else:
             raise TypeError("Weights can be assigned to "
                             "numpy.ndarray, common.pynn_utils.Weights,"
                             " or list types.")
         self._update_shape()
 
+    @property
+    def flat_non_normalized_weights(self):
+        return list(itertools.chain.from_iterable(self._weights.tolist()))
+
+    @flat_non_normalized_weights.setter
+    def flat_non_normalized_weights(self, w):
+        wr = numpy.reshape(w, self.shape)
+        self._weights = wr / self._max_weight
+
+    @property
+    def non_normalized_numpy_weights(self):
+        return self._weights * self._max_weight
+
+    @non_normalized_numpy_weights.setter
+    def non_normalized_numpy_weights(self, w):
+        self._weights = w / self._max_weight
+        self._update_shape()
+
+    @property
+    def normalized_numpy_weights(self):
+        return self._weights
+
+    @normalized_numpy_weights.setter
+    def normalized_numpy_weights(self, w):
+        self._weights = w
+        self._update_shape()
+
     def __getitem__(self, i):
         return self._weights[i]
 
-    def __setitem__(self, key, value):
-        self._weights[key] = value
+    def set_normalized_weight(self, i, j, w):
+        self._weights[i][j] = w
 
-    def get_weights_vector(self, target_idx):
+    def set_non_normalized_weight(self, i, j, w):
+        self._weights[i][j] = w / self._max_weight
+
+    def _apply_binary_scalar_operator(self, operator, other):
+        oshape = None
+        r = None
+        try:        
+            if isinstance(other, Weights):
+                if other._max_weight != self._max_weight:
+                    ValueError("Operation not possible as operands have "
+                               "incompatible maximum conductances.")
+                oshape = other.shape
+                r = numpy.array(self._weights)
+            else:
+                if isinstance(other, list): 
+                    oshape = numpy.shape(other)
+                elif not hasattr(initializer, '__getitem__'):
+                    raise TypeError("Second operand could not be interpreted "
+                                    "as an array of weights.")
+            if oshape != None and oshape != self.shape:
+                raise IndexError
+            if r == None:
+                r = numpy.zeros(oshape)
+                for x in xrange(self._dim1):
+                    for y in xrange(self._dim2):
+                        r[x][y] = operator(self._weights[x][y], other[x][y])
+            else:
+                r -= other._weights                
+        except IndexError:
+            raise ValueError("Operation not possible as operands have "
+                             "incompatible shapes.")
+        w = Weights([0], max_weight=self._max_weight)
+        w._dim1, w._dim2 = self.shape
+        w._weights = r
+        return w
+
+    def __add__(self, other):
+        return self._apply_binary_scalar_operator(operator.add, other)
+                                             
+    def __sub__(self, other):
+        return self._apply_binary_scalar_operator(operator.sub, other)
+
+    def __radd__(self, other):
+        return self._apply_binary_scalar_operator(operator.add, other)
+
+    def __rsub__(self, other):
+        return self._apply_binary_scalar_operator(lambda a, b: b - a, other)
+
+    def get_normalized_weights_vector(self, target_idx):
         """Returns the weights vector to unit target_idx (target unit
         index in target population). NaNs (weights of connections from
         non-connected units) are omitted."""
@@ -183,7 +266,7 @@ class Weights(object):
                        for i in xrange(self._dim1)]
         return list(itertools.ifilterfalse(math.isnan, w_with_nans))
 
-    def set_weights_vector(self, target_idx, weights):
+    def set_normalized_weights_vector(self, target_idx, weights):
         """Sets the weights vector to unit target_idx (target unit
         index in target population). The weight vector should have as
         many elements as connected units (no NaN allowed)."""
@@ -200,26 +283,36 @@ class Weights(object):
             raise SimulationError("Dimension mismatch (too many elements "
                                   "to assign to weights vector).")
 
-    def adjusted(self, error_mat, learning=None):
-        """Returns a matrix adjusted by removing the error terms
-        matrix from the array, scaling the change by the learning
-        coefficient (scalar) if available."""
-        if learning == None:
-            learning = self._default_l_rate
-        if isinstance(error_mat, Weights):
-            error_mat = error_mat.numpy_weights
-        if not isinstance(error_mat, numpy.ndarray):
-            error_mat = numpy.array(error_mat)
-        return Weights(numpy.add(self._weights, -1 * error_mat * learning))
+    def __repr__(self):
+        "Prints the weights, mostly for debug purposes"
+        old_printopt = numpy.get_printoptions()
+        try:
+            import sys
+            numpy.set_printoptions(threshold=sys.maxint)
+            import os
+            rows, columns = map(int, os.popen('stty size', 'r').read().split())
+            r = "Weights(weights_array= \\\n%s, max_weight=%r)" % \
+                (numpy.array_str(a=self._weights,
+                                 max_line_width=columns-5,
+                                 precision=2),
+                 self._max_weight)
+        finally:
+            numpy.set_printoptions(**old_printopt)
+        return r
 
 
-def get_weights(proj):
-    return Weights(proj.getWeights(format='array'))
+def get_weights(proj, max_weight):
+    """Returns a Weights object with the values of the weights of the
+    projection. Use max_w to setup the maximal conductance in micro-S
+    or current in nA."""
+    return Weights(proj.getWeights(format='array'), max_weight=max_weight)
 
 
 def set_weights(proj, w):
+    """Sets the weights of the projection to the internal (non-normalized)
+    values in w."""
     if isinstance(w, Weights):
-        proj.setWeights(w.flat_weights)
+        proj.setWeights(w.flat_non_normalized_weights)
     else:
         raise TypeError("Requires an argument of class Weights.")
 

@@ -24,7 +24,7 @@ from SimPy.Simulation import Process
 
 from common.pynn_utils import get_weights, set_weights, get_input_layer, \
     get_rate_encoder, presynaptic_outputs
-from common.utils import log_tick, splice, LOGGER
+from common.utils import log_tick, splice, LOGGER, infinite_xrange
 from scheduling.pynn_scheduling import run_simulation, \
     schedule_input_presentation, schedule_output_rate_calculation
 import itertools
@@ -76,6 +76,7 @@ def train_kwta(trained_population,
                presentation_duration,
                learning_rule,
                learning_rate,
+               max_weight_value,
                stop_condition):
     """Self-organized learning. The trained_population should have
     k-WTA compatible inhibition. The neighbourhood function is used
@@ -100,29 +101,31 @@ def kwta_epoch(trained_population,
                neighbourhood_fn,
                presentation_duration,
                learning_rule,
-               learning_rate):
+               learning_rate,
+               max_weight_value):
     rate_enc = get_rate_encoder(trained_population)
     if neighbourhood_fn == None:
-        neighbourhood_fn = lambda _, u : (u, 1)
+        neighbourhood_fn = lambda _, u : [(u, 1)]
     for s in input_samples:
-        weights = get_weights(projection)
-        kwta_presentation(trained_population, s, presentation_duration, k)
-        argwinners = select_kwta_winners(trained_population, k)
-        for w in argwinners:
-            main_unit = rate_enc[w[1]][w[0]]
+        weights = get_weights(projection, max_weight=max_weight_value)
+        kwta_presentation(trained_population, input_population, s, presentation_duration)
+        argwinners = select_kwta_winners(trained_population, num_winners)
+        for argwin in argwinners:
+            main_unit = rate_enc[argwin[1]][argwin[0]][1]
             # Adapt the weights for winner w and any activated neighbour 
             for unit, factor in neighbourhood_fn(trained_population, main_unit):
-                unit_index = projection.id_to_index(unit)
+                unit_index = trained_population.id_to_index(unit)
                 # weight vector to the unit
-                wv = weights.get_weights_vector(unit_index)
+                wv = weights.get_normalized_weights_vector(unit_index)
                 # input to the unit
                 pre_syn_out = presynaptic_outputs(unit, projection)
+                post_syn_act = rate_enc.get_rate_for_unit_index(unit_index)
                 # calculate and apply the new weight vector
                 new_wv = learning_rule(pre_syn_out,
                                        post_syn_act,
                                        wv,
-                                       learning_rate*factor)
-                weights.set_weights_vector(unit_index, new_wv)
+                                       learning_rate * factor)
+                weights.set_normalized_weights_vector(unit_index, new_wv)
         set_weights(projection, weights)
 
 
@@ -132,13 +135,6 @@ def kwta_presentation(trained_population, input_population, sample, duration):
     run_simulation()
 
 
-def _infinite_xrange():
-    i = 0
-    while True:
-        yield i
-        i += 1
-
-
 def select_kwta_winners(population, k):
     """Returns the list of coordinates of the k most active units in
     the population. Ties are broken using uniform random selection."""
@@ -146,7 +142,7 @@ def select_kwta_winners(population, k):
     if k > 0:
         rate_enc = get_rate_encoder(population)
         rates = list(itertools.izip(splice(rate_enc.get_rates()),
-                                     _infinite_xrange()))
+                                     infinite_xrange()))
         # we need to shuffle to randomize ties resolution
         numpy.random.shuffle(rates)
         winners = rates[0:k]

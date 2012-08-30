@@ -78,3 +78,9 @@ def is_square(n):
         return True
     except ZeroDivisionError:
         return False
+
+def infinite_xrange():
+    i = 0
+    while True:
+        yield i
+        i += 1
