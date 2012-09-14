@@ -57,9 +57,9 @@ def setup_and_fill_adapter():
     Tns.pynn_proj2 = pynnn.Projection(Tns.pynn_pop2, Tns.pynn_pop1,
                                   pynnn.AllToAllConnector())
     A.add_pynn_projection(Tns.pynn_pop1, Tns.pynn_pop2,
-                          Tns.pynn_proj1.connection_manager)
+                          Tns.pynn_proj1)
     A.add_pynn_projection(Tns.pynn_pop2, Tns.pynn_pop1,
-                          Tns.pynn_proj2.connection_manager)
+                          Tns.pynn_proj2)
 
 
 @with_setup(setup_adapter)
@@ -80,14 +80,13 @@ def test_adapter_methods_call_check_open():
         pynn_pop1, pynn_pop2,
         pynnn.OneToOneConnector(),
         target='excitatory')
-    pynn_cnx_mgr = pynn_prj.connection_manager
     pynn_u = pynn_pop1[0]
     methods_checking_open = [
         [A.assert_open, ()],
         [A.commit_structure, ()],
         [A.add_pynn_population, (pynn_pop1,)],
         [A.add_pynn_projection, (pynn_pop1, pynn_pop1,
-                                     pynn_cnx_mgr)]]
+                                     pynn_prj)]]
     for m in methods_checking_open:
         m[0](*m[1])
         assert A.check_open.called, \

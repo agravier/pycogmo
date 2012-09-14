@@ -30,6 +30,7 @@ import numpy
 import operator
 from PIL import Image
 import pyNN.brian as pynnn
+import SimPy.Simulation as sim
 import types
 
 from utils import LOGGER, is_square, splice
@@ -65,11 +66,12 @@ class SimulationError(Exception):
         return self._msg
 
 
-def presynaptic_outputs(unit, projection):
+def presynaptic_outputs(unit, projection, t=None):
     """Returns the vector of all firing rates of units in the
-    presynaptic population that are connected to the given unit. This
-    assumes that the presynaptic population has a rate encoder with
-    records."""
+    presynaptic population that are connected to the given unit. The t
+    parameter can be set to restrict the computation to activity
+    younger than t units of time. The presynaptic population must have
+    a registered rate encoder with records."""
     pre_population = projection.pre
     post_population = projection.post
     if unit not in post_population:
@@ -83,10 +85,10 @@ def presynaptic_outputs(unit, projection):
             "rate encoder of the presynaptic population does not "
             "contain any record.")
     rates = numpy.array([])
-    connectivity = projection.connections.get('weight', 'array')
+    connectivity = projection.get('weight', 'array')
     connectivity_to_unit = \
         [(i, not math.isnan(connectivity[i][unit_index])) for i in xrange(len(connectivity))]
-    rates_to_add = [renc.get_rate_for_unit_index(i) for i, _
+    rates_to_add = [renc.get_rate_for_unit_index(i, t) for i, _
         in itertools.ifilter((lambda v: v[1]), connectivity_to_unit)]
     rates = numpy.append(rates, rates_to_add)
     return rates
@@ -179,7 +181,7 @@ class Weights(object):
 
     @property
     def flat_non_normalized_weights(self):
-        return list(itertools.chain.from_iterable(self._weights.tolist()))
+        return list(itertools.chain.from_iterable((self._weights * self._max_weight).tolist()))
 
     @flat_non_normalized_weights.setter
     def flat_non_normalized_weights(self, w):
@@ -517,9 +519,9 @@ class RectilinearInputLayer(RectilinearLayerAdapter):
                 # Will the GC collect the electrodes? Does PyNN delete
                 # them after use?
                 self.unit_adapters_mat[x][y][0] = \
-                    dcsource_class(amplitude=max_namp * sample[x][y], 
-                                   start=start_time, 
-                                   stop=start_time+duration)
+                    dcsource_class({"amplitude": max_namp * sample[x][y], 
+                                   "start" : start_time, 
+                                   "stop" : start_time+duration})
                 self.unit_adapters_mat[x][y][0].inject_into(
                     [self.unit_adapters_mat[x][y][1]])
 
@@ -566,15 +568,24 @@ class RectilinearOutputRateEncoder(RectilinearLayerAdapter):
             (self.update_history[:idx], [-1], self.update_history[idx:]))
         self.hist_len += 1
 
-    @staticmethod
-    def make_hist_weights_vec(update_history, window_width, idx):
-        """Parameters are the update times array, the rate averaging window 
-        width, and the current time index in the update times array. 
-        Returns the ndarray of weights by which to multiply the rates 
-        history vector to calculate the weighted recent activity of the unit.
-        The weight for the oldest rate is the head of the array. The sum of 
-        weights is 1 if the update_history array covers at least the duration
-        of window_width."""
+    def make_hist_weights_vec(self, update_history=None, window_width=None, idx=None):
+        """ Returns the ndarray of weights by which to multiply the
+        rates history vector to calculate the weighted recent activity
+        of the unit.  Parameters are the update times array
+        (update_history), the rate averaging window width
+        (window_width), and the current time index in the update times
+        array (idx). If update_history is not provided,
+        self.update_history is usedIf window_width is not provided,
+        self.window_width is used.  If idx is not provided, self.idx
+        is used.  The weight for the oldest rate is the head of the
+        array. The sum of weights is 1 if the update_history array
+        covers at least the duration of window_width."""
+        if update_history == None:
+            update_history = self.update_history
+        if idx == None:
+            idx = self.idx
+        if window_width == None:
+            window_width = self.window_width
         update_hist = numpy.append(update_history[idx+1:],
                                    update_history[:idx+1])
         update_dt = numpy.diff(update_hist)
@@ -656,31 +667,62 @@ class RectilinearOutputRateEncoder(RectilinearLayerAdapter):
                 self.unit_adapters_mat[x][y][0][self.idx] = \
                     rec.get(self.pynn_population[x*self._dim2+y])
 
-    def get_rates(self):
+    def get_rates(self, t=None):
+        """Returns the matrix of units weighted firing rates for the
+        last t time units, or for the whole window width of this rate
+        encoder it t is not specified.""" 
         r = numpy.zeros((self._dim1, self._dim2), dtype=numpy.float)
         for x in xrange(self._dim1):
             for y in xrange(self._dim2):
-                r[x][y] = self.get_rate(x, y)
+                r[x][y] = self.get_rate(x, y, t=t)
         return r
 
-    def get_rate_for_unit_index(self, unit_index):
-        return self.get_rate(unit_index / self._dim1, unit_index % self._dim2)
+    def get_rate_for_unit_index(self, unit_index, t=None):
+        return self.get_rate(unit_index / self._dim1,
+                             unit_index % self._dim2,
+                             t=t)
 
-    def get_rate(self, x, y):
-        return self.f_rate(self.unit_adapters_mat[x][y][0])
+    def get_rate(self, x, y, t=None):
+        return self.f_rate(self.unit_adapters_mat[x][y][0], t=t)
 
-    def f_rate(self, np_a, update_history=None):
+    def f_rate(self, np_a, t=None, update_history=None):
         """Returns the weighted average of the rates recorded in the
-        differences of the array np_a."""
+        differences of the array np_a. The t parameter can be used to
+        silence rate information older than t units of time, which is
+        necessary to select the firing rate pertaining to one event
+        only. If now-t does not fall on a recording boundary, the more
+        recent boundary is used, otherwise the rate recording may be
+        contaminated by spikes older than t. If that leaves no record
+        available (i.e. t < age of previous record), an error is
+        raised.
+
+        The update_history parameter overrides the
+        rate encoder's update history, it should only be used for
+        testing."""
         if update_history == None:
             update_history = self.update_history
         update_hist = numpy.append(update_history[self.idx+1:],
                                    update_history[:self.idx+1])
+        cut_i = 0
+        if t != None:
+            cut_t = sim.now() - t
+            cut_i = numpy.searchsorted(update_hist, cut_t, side='left')
+            # t must not be in the last interval:
+            if cut_i >= len(update_hist) - 1:
+                raise SimulationError("The rate encoder resolution is "
+                                      "insufficient to get any rate "
+                                      "data on the requested period.")
+        update_hist = update_hist[cut_i:]
         update_dt = numpy.diff(update_hist) * 1.
-        rates = numpy.diff(numpy.append(np_a[self.idx+1:], np_a[:self.idx+1]))
-        return self.make_hist_weights_vec(update_history,
-                                          self.window_width, 
-                                          self.idx).dot(rates / update_dt)
+        np_a = numpy.append(np_a[self.idx+1:], np_a[:self.idx+1])
+        np_a = np_a[cut_i:]
+        rates = numpy.diff(np_a)
+        window_width = min(sum(update_dt), self.window_width) if t!= None \
+            else self.window_width
+        return self.make_hist_weights_vec(update_history=update_hist,
+                                          window_width=window_width,
+                                          idx=len(update_hist)
+                                          ).dot(rates / update_dt)
 
 
 # WARNING / TODO: The following function reveals a design flaw. PyNN is insufficient and its networks should be encapsulated along with more metadata.

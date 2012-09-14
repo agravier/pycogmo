@@ -103,15 +103,12 @@ class PynnToVisuAdapter(object):
 
     def add_pynn_projection(self, sending_population,
                             receiving_population,
-                            connection_manager):
+                            projection):
         """Records a projection from sending_population to
-        receiving_population. The connection_manager parameter
-        expects a pyNN.brian.simulator.ConnectionManager, it can be
-        obtained by
-        pyNN.brian.simulator.Projection.connection_manager.
-        """
+        receiving_population. The projection parameter expects a
+        pyNN.common.Projection."""
         self.assert_open()
-        w = connection_manager.get("weight", "array")
+        w = projection.get("weight", "array")
         n_send, n_recv = w.shape
         for i in range(0, n_send):
             pynn_u = sending_population[i]

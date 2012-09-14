@@ -168,14 +168,14 @@ def test_select_kwta_winners():
     try:
         scheduling.nettraining.get_rate_encoder = Mock()
         scheduling.nettraining.get_rate_encoder.return_value = mock_rate_encoder
-        w = select_kwta_winners(mock_pop, 4)
+        w = select_kwta_winners(mock_pop, k=4, presentation_duration=100)
         eq_(set(w), set([(2, 12), (1, 3), (1, 8), (2, 5)]))
     finally:
         scheduling.nettraining.get_rate_encoder = common.pynn_utils.get_rate_encoder
 
 
 def setup_input_samples():
-    Tns.sample1 = InputSample(8, 8, [[1] * 8] * 4 + [[0] * 8] * 4)
+    Tns.sample1 = InputSample(8, 8, ([[1, 0] * 4] + [[0, 1] * 4]) * 4)#[[1] * 8] * 4 + [[0] * 8] * 4)
     Tns.sample2 = InputSample(8, 8, ([[0, 1] * 4] + [[1, 0] * 4]) * 4)
 
 
@@ -187,7 +187,7 @@ def test_kwta_epoch_1_winner():
     kwta_epoch(trained_population=Tns.p2,
                input_population=Tns.p1,
                projection=Tns.prj1_2,
-               input_samples=itertools.repeat(Tns.sample1, 10),
+               input_samples=itertools.repeat(Tns.sample1, 2),
                num_winners=1,
                neighbourhood_fn=None,
                presentation_duration=10,
@@ -204,11 +204,13 @@ def test_kwta_epoch_1_winner():
     weights_diff_1_nowin = numpy.array(weights_diff_1)
     weights_diff_1_nowin[argwinner_1] -= winner_diff_1
     assert_allclose(weights_diff_1_nowin, numpy.zeros(len(weights_diff_1)))
+    # run some time without input to let the activity come back to 0
+    run_simulation(10)
     # second epoch
     kwta_epoch(trained_population=Tns.p2,
                input_population=Tns.p1,
                projection=Tns.prj1_2,
-               input_samples=itertools.repeat(Tns.sample1, 10),
+               input_samples=itertools.repeat(Tns.sample2, 2),
                num_winners=1,
                neighbourhood_fn=None,
                presentation_duration=10,
@@ -217,9 +219,9 @@ def test_kwta_epoch_1_winner():
                max_weight_value=Tns.max_weight)
     sum_weights_after_2nd_epoch = \
         numpy.add.reduce(get_weights(Tns.prj1_2, Tns.max_weight)._weights, axis=0)
-    weights_diff_2 = sum_weights_after_2nd_epoch - sum_weights_before_1st_epoch
+    weights_diff_2 = sum_weights_after_2nd_epoch - sum_weights_after_1st_epoch
     argwinner_2 = numpy.argmax(weights_diff_2)
-    assert argwinner_1 == argwinner_2
+    assert argwinner_1 != argwinner_2
     # assert still only one non zero diff
     winner_diff_2 = weights_diff_2[argwinner_2]
     assert winner_diff_2 > 0

@@ -92,8 +92,8 @@ def setup_pynn_populations():
         Tns.p1, Tns.p2, pynnn.AllToAllConnector(allow_self_connections=False),
         target='excitatory')
     # Weights in nA as IF_curr_alpha uses current-based synapses
-    Tns.prj1_2.setWeights(10)
-    Tns.max_weight = 200
+    Tns.prj1_2.set("weight", 1)
+    Tns.max_weight = 10
 
 
 def setup_mock_pynn_population():
@@ -593,8 +593,7 @@ def test_rectilinear_input_layer_apply_input():
     assert mock_dcsource.call_count == 64
     for args_i in itertools.product(xrange(8), repeat=2):
         args = mock_dcsource.call_args_list[args_i[0] * 8 + args_i[1]]
-        assert args[0] == ()
-        assert args[1] == {'amplitude': Tns.ril1_max_namp * \
+        assert args[0][0] == {'amplitude': Tns.ril1_max_namp * \
                                some_sample[args_i[0]][args_i[1]],
                            'start': 12, 'stop': 12 + 51}
 
@@ -629,11 +628,11 @@ def test_rectilinear_ouput_rate_encoder_extend_capacity():
 def test_rectilinear_ouput_rate_encoder_make_hist_weights_vec():
     wv0 = Tns.rore1.make_hist_weights_vec([200, -50, 0, 50, 100, 150], 200, 0)
     wv0_ans = [0., 0.0625, 0.1875, 0.3125, 0.4375]
-    wv1 = RectilinearOutputRateEncoder.make_hist_weights_vec(
+    wv1 = Tns.rore1.make_hist_weights_vec(
         [190, 200, 0, 120, 140, 160], 110, 1)
-    wv2 = RectilinearOutputRateEncoder.make_hist_weights_vec(
+    wv2 = Tns.rore1.make_hist_weights_vec(
         [190, 200, 95, 120, 140, 160], 40, 1)
-    assert (wv0 == RectilinearOutputRateEncoder.make_hist_weights_vec(
+    assert (wv0 == Tns.rore1.make_hist_weights_vec(
         [200, -50, 0, 50, 100, 150], 200, 0)).all()
     assert (wv0_ans == wv0).all()
     assert sum(wv0) == 1.
@@ -707,14 +706,15 @@ def test_rectilinear_ouput_rate_encoder_update_rates_with_nonmonotonic_time():
 
 @with_setup(setup_mock_pynn_population)
 def test_rectilinear_ouput_rate_encoder_f_rate():
-    rore = RectilinearOutputRateEncoder(Tns.p_mock, 8, 8, 50, 200)
+    rore = RectilinearOutputRateEncoder(Tns.p_mock, dim1=8, dim2=8,
+                                        update_period=50, window_width=200)
     np_a = numpy.array([4, 5, 10, 0, 0, 0])
     result_shift_3 = numpy.array([0., 0.0625, 0.1875, 0.3125, 0.4375]).dot(
         [0, 0, 4/50., 1/50., 5/50.])
     rore.advance_idx()
     rore.advance_idx()
     rore.advance_idx()
-    rates = rore.f_rate(np_a, [100, 150, 200, -50, 0, 50])
+    rates = rore.f_rate(np_a, update_history=[100, 150, 200, -50, 0, 50])
     assert_allclose(rates, result_shift_3)
 
 
@@ -791,7 +791,7 @@ def setup_mock_rectinilinear_ouput_rate_encoders_full():
     r = numpy.array(range(2), dtype=numpy.float)
     Tns.r = numpy.array([r, r+2],
                     dtype=numpy.float)
-    Tns.rore1.get_rate = lambda x, y : Tns.r[x][y]
+    Tns.rore1.get_rate = lambda x, y, t : Tns.r[x][y]
     common.pynn_utils.POP_ADAPT_DICT[(Tns.p1,
         common.pynn_utils.RectilinearOutputRateEncoder)] = Tns.rore1
     common.pynn_utils.POP_ADAPT_DICT[(Tns.p2,
@@ -831,7 +831,7 @@ def setup_mock_rectinilinear_ouput_rate_encoders_1_to_1():
     r = numpy.array(range(8), dtype=numpy.float)
     Tns.r = numpy.array([r, r+8, r+16, r+24, r+32, r+40, r+48, r+56],
                     dtype=numpy.float)
-    Tns.rore1.get_rate = lambda x, y : Tns.r[x][y]
+    Tns.rore1.get_rate = lambda x, y, t : Tns.r[x][y]
     common.pynn_utils.POP_ADAPT_DICT[(Tns.p1,
         common.pynn_utils.RectilinearOutputRateEncoder)] = Tns.rore1
     common.pynn_utils.POP_ADAPT_DICT[(Tns.p2,

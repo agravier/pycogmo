@@ -109,17 +109,18 @@ def kwta_epoch(trained_population,
     for s in input_samples:
         weights = get_weights(projection, max_weight=max_weight_value)
         kwta_presentation(trained_population, input_population, s, presentation_duration)
-        argwinners = select_kwta_winners(trained_population, num_winners)
+        argwinners = select_kwta_winners(trained_population, num_winners, presentation_duration)
         for argwin in argwinners:
-            main_unit = rate_enc[argwin[1]][argwin[0]][1]
+            main_unit = rate_enc[argwin[0]][argwin[1]][1]
             # Adapt the weights for winner w and any activated neighbour 
             for unit, factor in neighbourhood_fn(trained_population, main_unit):
                 unit_index = trained_population.id_to_index(unit)
                 # weight vector to the unit
                 wv = weights.get_normalized_weights_vector(unit_index)
                 # input to the unit
-                pre_syn_out = presynaptic_outputs(unit, projection)
-                post_syn_act = rate_enc.get_rate_for_unit_index(unit_index)
+                pre_syn_out = presynaptic_outputs(unit, projection, t=presentation_duration)
+                post_syn_act = rate_enc.get_rate_for_unit_index(unit_index,
+                                                                t=presentation_duration)
                 # calculate and apply the new weight vector
                 new_wv = learning_rule(pre_syn_out,
                                        post_syn_act,
@@ -132,17 +133,19 @@ def kwta_epoch(trained_population,
 def kwta_presentation(trained_population, input_population, sample, duration):
     schedule_input_presentation(input_population, sample, None, duration)
     schedule_output_rate_calculation(trained_population, None, duration)
+    schedule_output_rate_calculation(input_population, None, duration)
     run_simulation()
 
 
-def select_kwta_winners(population, k):
+def select_kwta_winners(population, k, presentation_duration):
     """Returns the list of coordinates of the k most active units in
-    the population. Ties are broken using uniform random selection."""
+    the population for the the presentation duration to the current
+    simulator time. Ties are broken using uniform random selection."""
     argwinners = []
     if k > 0:
         rate_enc = get_rate_encoder(population)
-        rates = list(itertools.izip(splice(rate_enc.get_rates()),
-                                     infinite_xrange()))
+        rates = list(itertools.izip(splice(rate_enc.get_rates(t=presentation_duration)),
+                                    infinite_xrange()))
         # we need to shuffle to randomize ties resolution
         numpy.random.shuffle(rates)
         winners = rates[0:k]

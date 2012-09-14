@@ -100,6 +100,7 @@ class InputPresentation(sim.Process):
                                      self.duration)
         yield sim.hold, self, 0
 
+
 DEFAULT_INPUT_PRESENTATION_DURATION = 200
 def schedule_input_presentation(population,
                                 input_sample,
