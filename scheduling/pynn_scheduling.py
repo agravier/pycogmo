@@ -22,7 +22,8 @@
 import pyNN.brian as pynnn
 import SimPy.Simulation as sim
 from common.pynn_utils import get_input_layer, get_rate_encoder, \
-    InputSample, RectilinearInputLayer, InvalidMatrixShapeError
+    InputSample, RectilinearInputLayer, InvalidMatrixShapeError, \
+    POP_ADAPT_DICT
 from common.utils import LOGGER, optimal_rounding
 
 SIMULATION_END_T = 0
@@ -30,6 +31,8 @@ SIMULATION_END_T = 0
 pynnn.setup()
 PYNN_TIME_STEP = pynnn.get_time_step()
 PYNN_TIME_ROUNDING = optimal_rounding(PYNN_TIME_STEP)
+
+RATE_ENC_RESPAWN_DICT = dict()
 
 
 class DummyProcess(sim.Process):
@@ -46,6 +49,8 @@ def configure_scheduling():
     sim.initialize()
     pynnn.setup()
     SIMULATION_END_T = 0
+    RATE_ENC_RESPAWN_DICT.clear()
+    POP_ADAPT_DICT.clear()
 
 
 def run_simulation(end_time=None):
@@ -67,6 +72,14 @@ def run_simulation(end_time=None):
     else:
         DummyProcess().start(at=end_time)
         is_not_end = lambda t: t <= end_time
+    for e in RATE_ENC_RESPAWN_DICT.iteritems():
+        if e[1] == None:
+            continue
+        renc, start_time, end_time = e[0], e[1][0], e[1][1]
+        _schedule_output_rate_encoder(renc,
+                                      start_t=start_time,
+                                      end_t=end_time)
+    RATE_ENC_RESPAWN_DICT.clear() # unnecessary as _schedule_output_rate_encoder performs cleanup
     t_event_start = sim.peek()
     while is_not_end(t_event_start):
         LOGGER.debug("Progressing to SimPy event at time %s",
@@ -122,7 +135,7 @@ def schedule_input_presentation(population,
 
 class RateCalculation(sim.Process):
     """A RateCalculation process is a recurrent process initiated by the 
-    schedule_input_presentation function. It handles the 
+    schedule_output_rate_calculation function. It handles the 
     RectilinearOutputRateEncoder object that it has been given at construction
     time by reading the time of the next update and scheduling the next
     RateCalculation."""
@@ -163,9 +176,9 @@ class RateCalculation(sim.Process):
         return min(self._end_t, SIMULATION_END_T)
 
     def ACTIONS(self):
-        global SIMULATION_END_T
         LOGGER.debug("%s starting", self.name)
-        self._rate_encoder.update_rates(get_current_time())
+        if self._rate_encoder.last_update_time != get_current_time():
+            self._rate_encoder.update_rates(get_current_time())
         if self.last_schedulable_time > self.corrected_time:
             # At least one more event has to be scheduled.
             next_period = self.corrected_time + self._rate_encoder.update_period
@@ -173,6 +186,13 @@ class RateCalculation(sim.Process):
             _schedule_output_rate_encoder(self._rate_encoder,
                                           start_t=next_time,
                                           end_t=self._end_t)
+        elif self._end_t == None or self._end_t > get_current_time():
+            # The rate encoder should go on encoding if the simulation is restarted.
+            # We use a special structure for those.
+            start = get_current_time() + self._rate_encoder.update_period
+            if self._end_t != None:
+                start = min(start, self._end_t)
+            RATE_ENC_RESPAWN_DICT[self._rate_encoder] = (start, self._end_t)
         yield sim.hold, self, 0
 
 
@@ -192,6 +212,8 @@ def schedule_output_rate_calculation(population, start_t=None, duration=None):
 
 
 def _schedule_output_rate_encoder(rate_enc, start_t, end_t):
+    # Pop it from the respawn set if it's there.
+    RATE_ENC_RESPAWN_DICT[rate_enc] = None
     # workaround of the workaround of 
     # neuralensemble.org/trac/PyNN/ticket/200:
     rc = None

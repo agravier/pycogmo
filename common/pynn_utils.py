@@ -84,13 +84,13 @@ def presynaptic_outputs(unit, projection, t=None):
             "Cannot compute presynaptic activation because the "
             "rate encoder of the presynaptic population does not "
             "contain any record.")
-    rates = numpy.array([])
     connectivity = projection.get('weight', 'array')
     connectivity_to_unit = \
-        [(i, not math.isnan(connectivity[i][unit_index])) for i in xrange(len(connectivity))]
-    rates_to_add = [renc.get_rate_for_unit_index(i, t) for i, _
-        in itertools.ifilter((lambda v: v[1]), connectivity_to_unit)]
-    rates = numpy.append(rates, rates_to_add)
+        [(i, not math.isnan(connectivity[i][unit_index]))
+         for i in xrange(len(connectivity))]
+    rates = numpy.array(
+        [renc.get_rate_for_unit_index(i, t) for i, _
+         in itertools.ifilter((lambda v: v[1]), connectivity_to_unit)])
     return rates
 
 
@@ -103,7 +103,8 @@ class Weights(object):
     normalized for the purpose of learning, max_weight needs to be
     provided. It is a model-specific and should reflect the maximum
     conductance of a synapse/group of synpatic connections from one
-    cell to the other.
+    cell to the other. It is the physical value corresponding to the
+    normalized weight value of 1 between 2 cells.
 
     All methods and properties return normalized weights unless
     specified otherwise."""
@@ -290,7 +291,7 @@ class Weights(object):
         old_printopt = numpy.get_printoptions()
         try:
             import sys
-            numpy.set_printoptions(threshold=sys.maxint)
+            numpy.set_printoptions(threshold=sys.maxint, suppress=True)
             import os
             rows, columns = map(int, os.popen('stty size', 'r').read().split())
             r = "Weights(weights_array= \\\n%s, max_weight=%r)" % \
@@ -558,6 +559,9 @@ class RectilinearOutputRateEncoder(RectilinearLayerAdapter):
     def extend_capacity(self, idx):
         """Adds one cell to all logging structures at position idx, and 
         increments self.hist_len."""
+        if idx == 0:
+            # Edge case: extension at the end of the records
+            idx = self.hist_len
         for x in xrange(self._dim1):
             for y in xrange(self._dim2):
                 self.unit_adapters_mat[x][y][0] = numpy.concatenate(
@@ -602,13 +606,19 @@ class RectilinearOutputRateEncoder(RectilinearLayerAdapter):
                 itertools.count(), cumsum_dt),
             numpy.float)
         return areas / window_width
-    
+
     def advance_idx(self):
         self.idx = self.next_idx
 
     @property
     def next_idx(self):
         return self.idx_offset(1)
+
+    @property
+    def last_update_time(self):
+        if self.update_history != None:
+            return self.update_history[self.idx]
+        return None
 
     @property
     def previous_idx(self):
@@ -696,9 +706,8 @@ class RectilinearOutputRateEncoder(RectilinearLayerAdapter):
         available (i.e. t < age of previous record), an error is
         raised.
 
-        The update_history parameter overrides the
-        rate encoder's update history, it should only be used for
-        testing."""
+        The update_history parameter overrides the rate encoder's
+        update history, it should only be used for testing."""
         if update_history == None:
             update_history = self.update_history
         update_hist = numpy.append(update_history[self.idx+1:],
@@ -723,6 +732,41 @@ class RectilinearOutputRateEncoder(RectilinearLayerAdapter):
                                           window_width=window_width,
                                           idx=len(update_hist)
                                           ).dot(rates / update_dt)
+
+    def __repr__(self):
+        "Returns a string representation for debugging."
+        old_printopt = numpy.get_printoptions()
+        try:
+            import sys
+            numpy.set_printoptions(threshold=sys.maxint, suppress=True)
+            import os
+            rows, columns = map(int, os.popen('stty size', 'r').read().split())
+            # We don't return the rates in self.unit_adapters_mat
+            array_str = numpy.array_str(a=self.update_history,
+                                        max_line_width=columns-26,
+                                        precision=2) \
+                                        if self.update_history != None \
+                                        else None
+            r = (
+                "RectilinearOuputRateEncoder(\n"
+                "  self.pynn_pop =       %r\n"
+                "  self.shape =          %r\n"
+                "  self.window_width =   %r\n"
+                "  self.update_period =  %r\n"
+                "  self.hist_len =       %r\n"
+                "  self.idx =            %r\n"
+                "  self.update_history = %s\n"
+                ")" ) % \
+                (self.pynn_population,
+                 (self._dim1, self._dim2),
+                 self.window_width,
+                 self.update_period,
+                 self.hist_len,
+                 self.idx,
+                 array_str)
+        finally:
+            numpy.set_printoptions(**old_printopt)
+        return r
 
 
 # WARNING / TODO: The following function reveals a design flaw. PyNN is insufficient and its networks should be encapsulated along with more metadata.

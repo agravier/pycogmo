@@ -93,7 +93,7 @@ def setup_pynn_populations():
         target='excitatory')
     # Weights in nA as IF_curr_alpha uses current-based synapses
     Tns.prj1_2.set("weight", 1)
-    Tns.max_weight = 10
+    Tns.max_weight = 33
 
 
 def setup_mock_pynn_population():

@@ -23,7 +23,7 @@ network.
 from SimPy.Simulation import Process
 
 from common.pynn_utils import get_weights, set_weights, get_input_layer, \
-    get_rate_encoder, presynaptic_outputs
+    get_rate_encoder, presynaptic_outputs, SimulationError
 from common.utils import log_tick, splice, LOGGER, infinite_xrange
 from scheduling.pynn_scheduling import run_simulation, \
     schedule_input_presentation, schedule_output_rate_calculation
@@ -86,11 +86,14 @@ def train_kwta(trained_population,
     num_winners should be at least equal to the number of elementary
     features (elementary as in encodable by one unit) present in each
     training sample."""
+    if trained_population == input_population:
+        raise SimulationError("In kWTA training, the input population and "
+                              "the trained population must differ.")
     while not stop_condition:        
         kwta_epoch(trained_population, input_population, projection,
                    input_samples, num_winners, neighbourhood_fn,
                    presentation_duration, learning_rule,
-                   learning_rate)
+                   learning_rate, max_weight_value)
     
 
 def kwta_epoch(trained_population,
@@ -102,7 +105,23 @@ def kwta_epoch(trained_population,
                presentation_duration,
                learning_rule,
                learning_rate,
-               max_weight_value):
+               max_weight_value,
+               trained_pop_max_rate = None,
+               input_pop_max_rate = None):
+    if trained_pop_max_rate == None:
+        try:
+            trained_pop_max_rate = trained_population.max_unit_rate
+        except AttributeError:
+            raise SimulationError("Could not find the trained population's max "
+                                  "expected spiking rate per unit. It should be "
+                                  "set as population.max_unit_rate.")
+    if input_pop_max_rate == None:
+        try:
+            input_pop_max_rate = input_population.max_unit_rate
+        except AttributeError:
+            raise SimulationError("Could not find the input population's max "
+                                  "expected spiking rate per unit. It should be "
+                                  "set as population.max_unit_rate.")
     rate_enc = get_rate_encoder(trained_population)
     if neighbourhood_fn == None:
         neighbourhood_fn = lambda _, u : [(u, 1)]
@@ -117,10 +136,13 @@ def kwta_epoch(trained_population,
                 unit_index = trained_population.id_to_index(unit)
                 # weight vector to the unit
                 wv = weights.get_normalized_weights_vector(unit_index)
-                # input to the unit
+                # input to the unit (normalized, TODO: sigmoidal contrast-enhancement?)
                 pre_syn_out = presynaptic_outputs(unit, projection, t=presentation_duration)
+                pre_syn_out /= input_pop_max_rate
+                # ouput of the unit (normalized, TODO: sigmoidal contrast-enhancement?)
                 post_syn_act = rate_enc.get_rate_for_unit_index(unit_index,
                                                                 t=presentation_duration)
+                post_syn_act /= trained_pop_max_rate
                 # calculate and apply the new weight vector
                 new_wv = learning_rule(pre_syn_out,
                                        post_syn_act,
@@ -132,8 +154,8 @@ def kwta_epoch(trained_population,
 
 def kwta_presentation(trained_population, input_population, sample, duration):
     schedule_input_presentation(input_population, sample, None, duration)
-    schedule_output_rate_calculation(trained_population, None, duration)
-    schedule_output_rate_calculation(input_population, None, duration)
+    schedule_output_rate_calculation(trained_population, None)
+    schedule_output_rate_calculation(input_population, None)
     run_simulation()
 
 

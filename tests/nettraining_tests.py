@@ -28,6 +28,7 @@ from scheduling.nettraining import *
 # nose.tools version:
 from numpy.testing import assert_allclose
 from numpy.testing.utils import assert_array_less
+import pyNN.brian as pynnn
 from tests.pynn_utils_tests import setup_pynn_populations, \
     setup_registered_rectinilinear_ouput_rate_encoders, Tns
 from common.pynn_utils import enable_recording, InputSample, \
@@ -35,6 +36,7 @@ from common.pynn_utils import enable_recording, InputSample, \
 from tests.pynn_scheduling_tests import setup_clean_simpy
 from scheduling.pynn_scheduling import get_current_time, configure_scheduling
 import scheduling
+import common.pynn_utils
 
 DUMMY_LOGGER = logging.getLogger("testLogger")
 DUMMY_LOGGER.addHandler(NullHandler())
@@ -60,9 +62,50 @@ def setup_data():
     Tns.s_out_3 = -1
 
 
+def setup_input_samples():
+    Tns.sample1 = InputSample(8, 8, ([[1, 0] * 4] + [[0, 1] * 4]) * 4)#[[1] * 8] * 4 + [[0] * 8] * 4)
+    Tns.sample2 = InputSample(8, 8, ([[0, 1] * 4] + [[1, 0] * 4]) * 4)
+
+
+def setup_4_units_input_samples():
+    Tns.sample1 = InputSample(2, 2, [[1, 0], [0, 1]])
+    Tns.sample2 = InputSample(2, 2, [[0, 1], [1, 0]])
+
+
 def setup_2_layers_ff_net():
     configure_scheduling()
     setup_registered_rectinilinear_ouput_rate_encoders()
+    enable_recording(Tns.p1, Tns.p2)
+    schedule_output_rate_calculation(Tns.p1)
+    schedule_output_rate_calculation(Tns.p2)
+    
+
+def setup_2_layers_4_units_ff_net():
+    configure_scheduling()
+    pynnn.setup()
+    Tns.p1 = pynnn.Population(4, pynnn.IF_curr_alpha,
+                          structure=pynnn.space.Grid2D())
+    Tns.p2 = pynnn.Population(4, pynnn.IF_curr_alpha,
+                          structure=pynnn.space.Grid2D())
+    Tns.prj1_2 = pynnn.Projection(
+        Tns.p1, Tns.p2, pynnn.AllToAllConnector(allow_self_connections=False),
+        target='excitatory')
+    Tns.prj1_2.set("weight", 1)
+    Tns.max_weight = 34
+    Tns.rore1_update_p = 10
+    Tns.rore1_win_width = 200
+    Tns.rore2_update_p = 10
+    Tns.rore2_win_width = 200
+    Tns.rore1 = RectilinearOutputRateEncoder(Tns.p1, 2, 2,
+                                             Tns.rore1_update_p,
+                                             Tns.rore1_win_width)
+    Tns.rore2 = RectilinearOutputRateEncoder(Tns.p2, 2, 2,
+                                             Tns.rore2_update_p,
+                                             Tns.rore2_win_width)
+    common.pynn_utils.POP_ADAPT_DICT[(Tns.p1,
+        common.pynn_utils.RectilinearOutputRateEncoder)] = Tns.rore1
+    common.pynn_utils.POP_ADAPT_DICT[(Tns.p2,
+        common.pynn_utils.RectilinearOutputRateEncoder)] = Tns.rore2
     enable_recording(Tns.p1, Tns.p2)
     schedule_output_rate_calculation(Tns.p1)
     schedule_output_rate_calculation(Tns.p2)
@@ -142,12 +185,12 @@ def test_kwta_presentation():
     """Tests one kwta presentation to half of the units, followed by
     another presentation to the second half."""
     s = InputSample(8, 8, [[1] * 8] * 4 + [[0] * 8] * 4)
-    kwta_presentation(Tns.p1, Tns.p1, s, 2)
+    kwta_presentation(Tns.p2, Tns.p1, s, 2)
     assert get_current_time() == 2
     rates = get_rate_encoder(Tns.p1).get_rates()
     assert_array_less(rates[4:8], rates[0:4])
     s = InputSample(8, 8, [[0] * 8] * 4 + [[1] * 8] * 4)
-    kwta_presentation(Tns.p1, Tns.p1, s, 2)
+    kwta_presentation(Tns.p2, Tns.p1, s, 2)
     assert get_current_time() == 4
     rates = get_rate_encoder(Tns.p1).get_rates()
     assert_array_less(rates[0:4], rates[4:8])
@@ -174,14 +217,11 @@ def test_select_kwta_winners():
         scheduling.nettraining.get_rate_encoder = common.pynn_utils.get_rate_encoder
 
 
-def setup_input_samples():
-    Tns.sample1 = InputSample(8, 8, ([[1, 0] * 4] + [[0, 1] * 4]) * 4)#[[1] * 8] * 4 + [[0] * 8] * 4)
-    Tns.sample2 = InputSample(8, 8, ([[0, 1] * 4] + [[1, 0] * 4]) * 4)
-
-
 @with_setup(setup_input_samples)
 @with_setup(setup_2_layers_ff_net)
 def test_kwta_epoch_1_winner():
+    Tns.p2.max_unit_rate=10
+    Tns.p1.max_unit_rate=3.3
     sum_weights_before_1st_epoch = \
         numpy.add.reduce(get_weights(Tns.prj1_2, Tns.max_weight)._weights, axis=0)
     kwta_epoch(trained_population=Tns.p2,
@@ -190,7 +230,7 @@ def test_kwta_epoch_1_winner():
                input_samples=itertools.repeat(Tns.sample1, 2),
                num_winners=1,
                neighbourhood_fn=None,
-               presentation_duration=10,
+               presentation_duration=25,
                learning_rule=conditional_pca_learning,
                learning_rate=0.1,
                max_weight_value=Tns.max_weight)
@@ -205,7 +245,8 @@ def test_kwta_epoch_1_winner():
     weights_diff_1_nowin[argwinner_1] -= winner_diff_1
     assert_allclose(weights_diff_1_nowin, numpy.zeros(len(weights_diff_1)))
     # run some time without input to let the activity come back to 0
-    run_simulation(10)
+    from scheduling.pynn_scheduling import RATE_ENC_RESPAWN_DICT
+    run_simulation(get_current_time()+30)
     # second epoch
     kwta_epoch(trained_population=Tns.p2,
                input_population=Tns.p1,
@@ -213,7 +254,7 @@ def test_kwta_epoch_1_winner():
                input_samples=itertools.repeat(Tns.sample2, 2),
                num_winners=1,
                neighbourhood_fn=None,
-               presentation_duration=10,
+               presentation_duration=25,
                learning_rule=conditional_pca_learning,
                learning_rate=0.1,
                max_weight_value=Tns.max_weight)
@@ -229,3 +270,24 @@ def test_kwta_epoch_1_winner():
     weights_diff_2_nowin[argwinner_2] -= winner_diff_2
     assert_allclose(weights_diff_2_nowin, numpy.zeros(len(weights_diff_2)))
 
+
+@with_setup(setup_4_units_input_samples)
+@with_setup(setup_2_layers_4_units_ff_net)
+def test_kwta_epoch_weights_below_1():
+    sum_weights_after_epoch = numpy.ndarray([], dtype=numpy.float)
+    import sys
+    for i in xrange(8):
+        kwta_epoch(trained_population=Tns.p2,
+                   input_population=Tns.p1,
+                   projection=Tns.prj1_2,
+                   input_samples=itertools.repeat(Tns.sample1, 1),
+                   num_winners=1,
+                   neighbourhood_fn=None,
+                   presentation_duration=22,
+                   learning_rule=conditional_pca_learning,
+                   learning_rate=1,
+                   max_weight_value=Tns.max_weight,
+                   trained_pop_max_rate=10,
+                   input_pop_max_rate=3.4)
+    assert (get_weights(Tns.prj1_2, Tns.max_weight).normalized_numpy_weights <= 1).all()
+    
