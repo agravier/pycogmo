@@ -769,26 +769,42 @@ class RectilinearOutputRateEncoder(RectilinearLayerAdapter):
         return r
 
 
-# WARNING / TODO: The following function reveals a design flaw. PyNN is insufficient and its networks should be encapsulated along with more metadata.
+def rectilinear_shape(population):
+    try:
+        pos = population.positions
+    except Exception, e:
+        LOGGER.warning(("Could not retrieve units positions for population "
+                         "%s; assuming square shape."), population.label)
+        if not is_square(population.size):
+            raise TypeError(("The shape population %s is not square and could "
+                              "neither be retreived nor guessed."), population.label)
+        dim1 = dim2 = int(math.sqrt(population.size))
+    else:
+        dim1 = len(set(pos[1]))
+        dim2 = len(set(pos[0]))
+    return (dim1, dim2)
+
+
+# WARNING / TODO: The following function reveals a design flaw in
+# pycogmo. PyNN is insufficient and its networks should be
+# encapsulated along with more metadata.
 def population_adpater_provider(pop_prov_dict,
                                 provided_class,
                                 population):
-    """Factory function providing an adapter of the specified class for
-    the population parameter. pop_prov_dict is a dictionary taking a
-    (population, provided_class) tuple as key, and returning an
-    instance of provided_class initialized with 3 arguments: the population,
-    its size in the first dimension, and its size in the second dimension."""
+    """Factory function providing an adapter of the specified class
+    for the population parameter. pop_prov_dict is a dictionary taking
+    a (population, provided_class) tuple as key, and returning an
+    instance of provided_class initialized with 3 arguments: the
+    population, its size in the first dimension, and its size in the
+    second dimension."""
     key = (population, provided_class)
     if pop_prov_dict.has_key(key):
         return pop_prov_dict[key]
     else:
-        LOGGER.warning(("No %s for population %s, creating one assuming" 
-                       "a square shape."), provided_class.__name__,
-                       population.label)
-        if not is_square(population.size):
-            raise TypeError("The input layer shape could not be guessed.")
-        dim = int(math.sqrt(population.size))
-        inst = provided_class(population, dim, dim)
+        LOGGER.warning("No %s for population %s, creating one.",
+                       provided_class.__name__, population.label)
+        dim1, dim2 = rectilinear_shape(population)
+        inst = provided_class(population, dim1, dim2)
     return pop_prov_dict.setdefault(key, inst)
 
 
@@ -798,7 +814,7 @@ POP_ADAPT_DICT = {}
 get_input_layer = functools.partial(population_adpater_provider,
                                     POP_ADAPT_DICT,
                                     RectilinearInputLayer)
-get_input_layer.__doc__ = ("Provides a unique input layer for the"
+get_input_layer.__doc__ = ("Provides a unique input layer for the "
                            "given population.") 
 
 

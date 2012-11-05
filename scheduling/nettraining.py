@@ -77,7 +77,10 @@ def train_kwta(trained_population,
                learning_rule,
                learning_rate,
                max_weight_value,
-               stop_condition):
+               trained_pop_max_rate=None,
+               input_pop_max_rate=None,
+               min_delta_w=None,
+               max_epoch=None):
     """Self-organized learning. The trained_population should have
     k-WTA compatible inhibition. The neighbourhood function is used
     for neighbourhood learning only, not for inhibition. The
@@ -89,11 +92,19 @@ def train_kwta(trained_population,
     if trained_population == input_population:
         raise SimulationError("In kWTA training, the input population and "
                               "the trained population must differ.")
-    while not stop_condition:        
-        kwta_epoch(trained_population, input_population, projection,
-                   input_samples, num_winners, neighbourhood_fn,
-                   presentation_duration, learning_rule,
-                   learning_rate, max_weight_value)
+    if min_delta_w == None and max_epoch == None:
+        raise SimulationError("No stop condition specified for kWTA training.")
+    epoch_num = 0
+    while not stop_condition:
+        delta_w = kwta_epoch(trained_population, input_population,
+                             projection, input_samples, num_winners,
+                             neighbourhood_fn, presentation_duration,
+                             learning_rule, learning_rate,
+                             max_weight_value, trained_pop_max_rate,
+                             input_pop_max_rate)
+        epoch_num += 1
+        stop_condition = (epoch_num > max_epoch and max_epoch != None) or \
+            (delta_w < min_delta_w)
     
 
 def kwta_epoch(trained_population,
@@ -106,8 +117,8 @@ def kwta_epoch(trained_population,
                learning_rule,
                learning_rate,
                max_weight_value,
-               trained_pop_max_rate = None,
-               input_pop_max_rate = None):
+               trained_pop_max_rate=None,
+               input_pop_max_rate=None):
     if trained_pop_max_rate == None:
         try:
             trained_pop_max_rate = trained_population.max_unit_rate

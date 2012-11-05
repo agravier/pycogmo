@@ -291,3 +291,139 @@ def test_kwta_epoch_weights_below_1():
                    input_pop_max_rate=3.4)
     assert (get_weights(Tns.prj1_2, Tns.max_weight).normalized_numpy_weights <= 1).all()
     
+
+@with_setup(setup_input_samples)
+@with_setup(setup_2_layers_ff_net)
+def test_kwta_epoch_2_winners():
+    Tns.p2.max_unit_rate=10
+    Tns.p1.max_unit_rate=3.3
+    sum_weights_before_1st_epoch = \
+        numpy.add.reduce(get_weights(Tns.prj1_2, Tns.max_weight)._weights, axis=0)
+    kwta_epoch(trained_population=Tns.p2,
+               input_population=Tns.p1,
+               projection=Tns.prj1_2,
+               input_samples=itertools.repeat(Tns.sample1, 2),
+               num_winners=2,
+               neighbourhood_fn=None,
+               presentation_duration=25,
+               learning_rule=conditional_pca_learning,
+               learning_rate=0.1,
+               max_weight_value=Tns.max_weight)
+    sum_weights_after_1st_epoch = \
+        numpy.add.reduce(get_weights(Tns.prj1_2, Tns.max_weight)._weights, axis=0)
+    weights_diff_1 = sum_weights_after_1st_epoch - sum_weights_before_1st_epoch
+    argwinner_1 = numpy.argmax(weights_diff_1)
+    # assert diff is all 0 except winners
+    winner_diff_1 = weights_diff_1[argwinner_1]
+    assert winner_diff_1 > 0
+    weights_diff_1_nowin1 = numpy.array(weights_diff_1)
+    weights_diff_1_nowin1[argwinner_1] -= winner_diff_1
+    argwinner_2 = numpy.argmax(weights_diff_1_nowin1)
+    winner_diff_2 = weights_diff_1[argwinner_2]
+    assert winner_diff_2 > 0
+    assert argwinner_1 != argwinner_2
+    weights_diff_1_nowin2 = numpy.array(weights_diff_1_nowin1)
+    weights_diff_1_nowin2[argwinner_2] -= winner_diff_2
+    assert_allclose(weights_diff_1_nowin2, numpy.zeros(len(weights_diff_1)))
+    # run some time without input to let the activity come back to 0
+    from scheduling.pynn_scheduling import RATE_ENC_RESPAWN_DICT
+    run_simulation(get_current_time()+30)
+    # second epoch
+    kwta_epoch(trained_population=Tns.p2,
+               input_population=Tns.p1,
+               projection=Tns.prj1_2,
+               input_samples=itertools.repeat(Tns.sample2, 2),
+               num_winners=2,
+               neighbourhood_fn=None,
+               presentation_duration=25,
+               learning_rule=conditional_pca_learning,
+               learning_rate=0.1,
+               max_weight_value=Tns.max_weight)
+    sum_weights_after_2nd_epoch = \
+        numpy.add.reduce(get_weights(Tns.prj1_2, Tns.max_weight)._weights, axis=0)
+    weights_diff_2 = sum_weights_after_2nd_epoch - sum_weights_after_1st_epoch
+    argwinner_3 = numpy.argmax(weights_diff_2)
+    assert argwinner_1 != argwinner_3 and argwinner_2 != argwinner_3
+    # assert still only one non zero diff
+    winner_diff_3 = weights_diff_2[argwinner_3]
+    assert winner_diff_3 > 0
+    weights_diff_2_nowin3 = numpy.array(weights_diff_2)
+    weights_diff_2_nowin3[argwinner_3] -= winner_diff_3
+    argwinner_4 = numpy.argmax(weights_diff_2_nowin3)
+    winner_diff_4 = weights_diff_2[argwinner_4]
+    assert winner_diff_4 > 0
+    assert argwinner_1 != argwinner_4 and argwinner_2 != argwinner_4 \
+        and argwinner_3 != argwinner_4
+    weights_diff_2_nowin4 = numpy.array(weights_diff_2_nowin3)
+    weights_diff_2_nowin4[argwinner_4] -= winner_diff_4
+    assert_allclose(weights_diff_2_nowin4, numpy.zeros(len(weights_diff_2)))
+
+
+def neighbourhood_f(pop, unit):
+    l = r = t = b = (None, None, None)
+    unit_index = pop.id_to_index(unit)
+    print "unit_index", unit_index
+    u = pop.positions[0][unit_index], pop.positions[1][unit_index]
+    d1, d2 = common.pynn_utils.rectilinear_shape(pop)
+    for i in xrange(len(pop.positions[0])):
+        x, y = pop.positions[0][i], pop.positions[1][i]
+        if (x, y) == u:
+            continue
+        if x == u[0]:
+            if y < u[1] and (t[1] < y or t[0] == None):
+                t = x, y, i
+            elif y > u[1] and (b[1] > y or b[0] == None):
+                b = x, y, i
+        elif y == u[1]:
+            if x < u[0] and (l[0] < x or l[0] == None):
+                l = x, y, i
+            elif x > u[0] and (r[0] > x or r[0] == None):
+                r = x, y, i
+    return [(unit, 1)] + \
+        [(pop[i], 0.5) for _, _, i in
+         itertools.ifilter(lambda d: d[0] != None, [l, r, t, b])]
+
+
+@with_setup(setup_input_samples)
+@with_setup(setup_2_layers_ff_net)
+def test_kwta_epoch_with_neighbourhood():
+    Tns.p2.max_unit_rate=10
+    Tns.p1.max_unit_rate=3.3
+    sum_weights_before_1st_epoch = \
+        numpy.add.reduce(get_weights(Tns.prj1_2, Tns.max_weight)._weights, axis=0)
+    kwta_epoch(trained_population=Tns.p2,
+               input_population=Tns.p1,
+               projection=Tns.prj1_2,
+               input_samples=itertools.repeat(Tns.sample1, 2),
+               num_winners=1,
+               neighbourhood_fn=neighbourhood_f,
+               presentation_duration=25,
+               learning_rule=conditional_pca_learning,
+               learning_rate=0.1,
+               max_weight_value=Tns.max_weight)
+    sum_weights_after_1st_epoch = \
+        numpy.add.reduce(get_weights(Tns.prj1_2, Tns.max_weight)._weights, axis=0)
+    p2_shape = common.pynn_utils.rectilinear_shape(Tns.p2)
+    weights_diff = sum_weights_after_1st_epoch - sum_weights_before_1st_epoch
+    argwinner = numpy.argmax(weights_diff)
+    num_neigh = 4
+    x_pos = argwinner % p2_shape[1]
+    if x_pos == 0 or x_pos == p2_shape[1]-1:
+        num_neigh -= 1
+    y_pos = argwinner / p2_shape[0]
+    if y_pos == 0 or y_pos == p2_shape[0]-1:
+        num_neigh -= 1
+    print "weights_diff", weights_diff
+    for i in xrange(num_neigh+1):
+        winner_diff = weights_diff[argwinner]
+        assert winner_diff > 0
+        weights_diff[argwinner] -= winner_diff
+        argwinner = numpy.argmax(weights_diff)
+    print "weights_diff", weights_diff
+    assert_allclose(weights_diff, numpy.zeros(len(weights_diff)))
+
+
+@with_setup(setup_input_samples)
+@with_setup(setup_2_layers_ff_net)
+def test_train_kwta():
+    assert False
