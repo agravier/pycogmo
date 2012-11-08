@@ -57,6 +57,7 @@ def run_simulation(end_time=None):
     """Runs the simulation while keeping SimPy and PyNN synchronized at
     event times. Runs until no event is scheduled unless end_time is
     provided. if end_time is given, runs until end_time."""
+    global SIMULATION_END_T
     def run_pynn(end_t):
         pynn_now = pynnn.get_current_time()
         pynn_now_round = round(pynn_now, PYNN_TIME_ROUNDING)
@@ -71,7 +72,8 @@ def run_simulation(end_time=None):
         is_not_end = lambda t: not isinstance(t, sim.Infinity)
     else:
         DummyProcess().start(at=end_time)
-        is_not_end = lambda t: t <= end_time
+        e_t = end_time
+        is_not_end = lambda t: t <= e_t
     for e in RATE_ENC_RESPAWN_DICT.iteritems():
         if e[1] == None:
             continue
@@ -79,6 +81,8 @@ def run_simulation(end_time=None):
         _schedule_output_rate_encoder(renc,
                                       start_t=start_time,
                                       end_t=end_time)
+        if SIMULATION_END_T < end_time:
+            SIMULATION_END_T = end_time
     RATE_ENC_RESPAWN_DICT.clear() # unnecessary as _schedule_output_rate_encoder performs cleanup
     t_event_start = sim.peek()
     while is_not_end(t_event_start):
@@ -88,6 +92,8 @@ def run_simulation(end_time=None):
         sim.step() # process the event
         run_pynn(get_current_time()) # run PyNN until event end
         t_event_start = sim.peek()
+    if SIMULATION_END_T < get_current_time():
+        SIMULATION_END_T = get_current_time()
         
 
 class InputPresentation(sim.Process):
@@ -122,7 +128,7 @@ def schedule_input_presentation(population,
     """Schedule the constant application of the input sample to the
     input layer, for duration ms, by default from start_t = current
     end of simulation, extending the simulation's scheduled end
-    SIMULATION_END_T by the necessary number amount of time."""
+    SIMULATION_END_T by the necessary amount of time."""
     global SIMULATION_END_T
     input_layer = get_input_layer(population)
     if start_t == None:

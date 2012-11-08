@@ -103,6 +103,7 @@ def setup_mock_pynn_population():
     Tns.count_mock.get.return_value = 3
     Tns.p_mock.label = "Mock population"
     Tns.p_mock.size = 64
+    Tns.p_mock.positions = [[0, 1, 2, 3, 4, 5, 6, 7] * 8] * 2
 
 
 def setup_rectinilearinputlayers():

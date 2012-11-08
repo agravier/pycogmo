@@ -83,9 +83,11 @@ def train_kwta(trained_population,
                max_epoch=None):
     """Self-organized learning. The trained_population should have
     k-WTA compatible inhibition. The neighbourhood function is used
-    for neighbourhood learning only, not for inhibition. The
+    for explicit neighbourhood learning only, not for inhibition. The
     neighbourhood function takes a population and a unit and returns a
-    list of (unit, weight). It can also be None. As a guideline,
+    list of (unit, weight). It can also be None. A better way of
+    implementing neighbourhood learning by if to have populations with
+    lateral excitation and several winners. As a guideline,
     num_winners should be at least equal to the number of elementary
     features (elementary as in encodable by one unit) present in each
     training sample."""
@@ -94,7 +96,8 @@ def train_kwta(trained_population,
                               "the trained population must differ.")
     if min_delta_w == None and max_epoch == None:
         raise SimulationError("No stop condition specified for kWTA training.")
-    epoch_num = 0
+    epoch_num = 1
+    stop_condition = False
     while not stop_condition:
         delta_w = kwta_epoch(trained_population, input_population,
                              projection, input_samples, num_winners,
@@ -136,6 +139,7 @@ def kwta_epoch(trained_population,
     rate_enc = get_rate_encoder(trained_population)
     if neighbourhood_fn == None:
         neighbourhood_fn = lambda _, u : [(u, 1)]
+    max_deltaw = 0
     for s in input_samples:
         weights = get_weights(projection, max_weight=max_weight_value)
         kwta_presentation(trained_population, input_population, s, presentation_duration)
@@ -150,7 +154,7 @@ def kwta_epoch(trained_population,
                 # input to the unit (normalized, TODO: sigmoidal contrast-enhancement?)
                 pre_syn_out = presynaptic_outputs(unit, projection, t=presentation_duration)
                 pre_syn_out /= input_pop_max_rate
-                # ouput of the unit (normalized, TODO: sigmoidal contrast-enhancement?)
+                # output of the unit (normalized, TODO: sigmoidal contrast-enhancement?)
                 post_syn_act = rate_enc.get_rate_for_unit_index(unit_index,
                                                                 t=presentation_duration)
                 post_syn_act /= trained_pop_max_rate
@@ -160,7 +164,10 @@ def kwta_epoch(trained_population,
                                        wv,
                                        learning_rate * factor)
                 weights.set_normalized_weights_vector(unit_index, new_wv)
+                # calculate the max synaptic weight delta
+                max_deltaw = max(max_deltaw, max(numpy.abs(new_wv - wv)))
         set_weights(projection, weights)
+    return max_deltaw
 
 
 def kwta_presentation(trained_population, input_population, sample, duration):

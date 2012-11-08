@@ -362,7 +362,6 @@ def test_kwta_epoch_2_winners():
 def neighbourhood_f(pop, unit):
     l = r = t = b = (None, None, None)
     unit_index = pop.id_to_index(unit)
-    print "unit_index", unit_index
     u = pop.positions[0][unit_index], pop.positions[1][unit_index]
     d1, d2 = common.pynn_utils.rectilinear_shape(pop)
     for i in xrange(len(pop.positions[0])):
@@ -388,7 +387,7 @@ def neighbourhood_f(pop, unit):
 @with_setup(setup_2_layers_ff_net)
 def test_kwta_epoch_with_neighbourhood():
     Tns.p2.max_unit_rate=10
-    Tns.p1.max_unit_rate=3.3
+    Tns.p1.max_unit_rate=3.4
     sum_weights_before_1st_epoch = \
         numpy.add.reduce(get_weights(Tns.prj1_2, Tns.max_weight)._weights, axis=0)
     kwta_epoch(trained_population=Tns.p2,
@@ -413,17 +412,72 @@ def test_kwta_epoch_with_neighbourhood():
     y_pos = argwinner / p2_shape[0]
     if y_pos == 0 or y_pos == p2_shape[0]-1:
         num_neigh -= 1
-    print "weights_diff", weights_diff
     for i in xrange(num_neigh+1):
         winner_diff = weights_diff[argwinner]
         assert winner_diff > 0
         weights_diff[argwinner] -= winner_diff
         argwinner = numpy.argmax(weights_diff)
-    print "weights_diff", weights_diff
     assert_allclose(weights_diff, numpy.zeros(len(weights_diff)))
 
 
 @with_setup(setup_input_samples)
 @with_setup(setup_2_layers_ff_net)
+@raises(SimulationError)
+def test_train_kwta_error_if_no_stop_condition():
+    train_kwta(trained_population=Tns.p2,
+               input_population=Tns.p1,
+               projection=Tns.prj1_2,
+               input_samples=itertools.repeat(Tns.sample1, 2),
+               num_winners=1,
+               neighbourhood_fn=neighbourhood_f,
+               presentation_duration=25,
+               learning_rule=conditional_pca_learning,
+               learning_rate=.1,
+               max_weight_value=Tns.max_weight,
+               trained_pop_max_rate=None,
+               input_pop_max_rate=None,
+               min_delta_w=None,
+               max_epoch=None)
+
+
+@with_setup(setup_input_samples)
+@with_setup(setup_2_layers_ff_net)
 def test_train_kwta():
-    assert False
+    Tns.p2.max_unit_rate=10
+    Tns.p1.max_unit_rate=3.4
+    sum_weights_before_1st_training = \
+        numpy.add.reduce(get_weights(Tns.prj1_2, Tns.max_weight)._weights, axis=0)
+    train_kwta(trained_population=Tns.p2,
+               input_population=Tns.p1,
+               projection=Tns.prj1_2,
+               input_samples=list(itertools.repeat(Tns.sample1, 1)),
+               num_winners=1,
+               neighbourhood_fn=None,
+               presentation_duration=22,
+               learning_rule=conditional_pca_learning,
+               learning_rate=.01,
+               max_weight_value=Tns.max_weight,
+               trained_pop_max_rate=None,
+               input_pop_max_rate=None,
+               min_delta_w=None,
+               max_epoch=2)
+    sum_weights_after_1st_training = \
+        numpy.add.reduce(get_weights(Tns.prj1_2, Tns.max_weight)._weights, axis=0)
+    weights_diff = sum_weights_after_1st_training - sum_weights_before_1st_training
+    run_simulation(get_current_time()+30)
+    train_kwta(trained_population=Tns.p2,
+               input_population=Tns.p1,
+               projection=Tns.prj1_2,
+               input_samples=[Tns.sample2],
+               num_winners=1,
+               neighbourhood_fn=None,
+               presentation_duration=22,
+               learning_rule=conditional_pca_learning,
+               learning_rate=0.5,
+               max_weight_value=Tns.max_weight,
+               trained_pop_max_rate=None,
+               input_pop_max_rate=None,
+               min_delta_w=0.05,
+               max_epoch=None)
+    sum_weights_after_2nd_training = \
+        numpy.add.reduce(get_weights(Tns.prj1_2, Tns.max_weight)._weights, axis=0)
